@@ -1,5 +1,5 @@
 import React from 'react';
-import { Bell, LogOut, ShieldCheck, Database, Sparkles, RefreshCw } from 'lucide-react';
+import { Bell, LogOut, ShieldCheck, Sparkles, RefreshCw } from 'lucide-react';
 import { useAdminData } from '../../context/AdminDataContext';
 
 interface AdminHeaderProps {
@@ -7,8 +7,8 @@ interface AdminHeaderProps {
   onOpenFirebaseConfig?: () => void;
 }
 
-export const AdminHeader: React.FC<AdminHeaderProps> = ({ onOpenBroadcast, onOpenFirebaseConfig }) => {
-  const { logoutAdmin, isFirebaseLive, syncStatus, seedDefaultsToFirebase, adminEmail } = useAdminData();
+export const AdminHeader: React.FC<AdminHeaderProps> = ({ onOpenBroadcast }) => {
+  const { logoutAdmin, syncStatus, seedDefaultsToFirebase, adminEmail } = useAdminData();
   const [isSeeding, setIsSeeding] = React.useState(false);
 
   const handleSeed = async () => {
@@ -25,7 +25,7 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({ onOpenBroadcast, onOpe
         {/* Left: Brand & Title */}
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-[#4F46E5] flex items-center justify-center font-black text-amber-300 shadow">
-            ?
+            ⚡
           </div>
           <div>
             <div className="flex items-center gap-2">
@@ -58,23 +58,23 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({ onOpenBroadcast, onOpe
             <span>{isSeeding ? 'Seeding...' : 'Seed Data'}</span>
           </button>
 
-          {/* SEND NOTIF Button */}
+          {/* 📢 SEND NOTIF Button */}
           <button
             onClick={onOpenBroadcast}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-[8px] bg-[#4F46E5] hover:bg-[#4338CA] text-white text-xs font-bold shadow transition-all active:scale-95"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-[8px] bg-[#4F46E5] hover:bg-[#4338CA] text-white text-[12px] font-extrabold shadow transition-all active:scale-95"
           >
             <Bell className="w-3.5 h-3.5" />
-            <span>SEND NOTIF</span>
+            <span>📢 SEND NOTIF</span>
           </button>
 
           {/* EXIT Button */}
           <button
             onClick={logoutAdmin}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] bg-[#DC2626] hover:bg-[#B91C1C] text-white text-xs font-bold shadow transition-all active:scale-95"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-[8px] bg-[#DC2626] hover:bg-[#B91C1C] text-white text-[12px] font-extrabold shadow transition-all active:scale-95"
             title="Exit Admin Panel"
           >
             <LogOut className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">EXIT</span>
+            <span>EXIT</span>
           </button>
         </div>
       </div>
