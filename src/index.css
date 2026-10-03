@@ -6,15 +6,23 @@
   * {
     box-sizing: border-box;
   }
+  html {
+    font-size: 18px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
   body {
     margin: 0;
     padding: 0;
     min-height: 100vh;
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    background-color: #F8FAFC;
+    color: #0F172A;
   }
 }
 
-/* Custom Scrollbar */
+/* Custom Scrollbars */
 ::-webkit-scrollbar {
   width: 7px;
   height: 7px;
@@ -30,7 +38,6 @@
   background: #94A3B8;
 }
 
-/* Darker scrollbar for dark tabrow */
 .dark-scrollbar::-webkit-scrollbar {
   height: 5px;
 }
@@ -56,4 +63,150 @@
 
 .animate-pulse-subtle {
   animation: pulse-subtle 3s ease-in-out infinite;
+}
+
+/* ========================================================= */
+/* UNIVERSAL REALISTIC MOVING BORDER GRADIENT ENGINE         */
+/* ========================================================= */
+@property --border-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes border-rotate {
+  0% {
+    --border-angle: 0deg;
+  }
+  100% {
+    --border-angle: 360deg;
+  }
+}
+
+/* 1. Main Universal Moving Border for all White Cards & Panels */
+.moving-border-card,
+.bg-white.rounded-2xl.border,
+.bg-white.rounded-3xl.border,
+.bg-white.rounded-card,
+.bg-white.shadow-sm.rounded-2xl,
+.bg-white.shadow-sm.rounded-3xl {
+  position: relative !important;
+  background: 
+    linear-gradient(#ffffff, #ffffff) padding-box,
+    conic-gradient(from var(--border-angle), #6366f1, #06b6d4, #10b981, #f59e0b, #ec4899, #8b5cf6, #6366f1) border-box !important;
+  border: 2px solid transparent !important;
+  animation: border-rotate 4s linear infinite !important;
+  box-shadow: 0 4px 20px -2px rgba(99, 102, 241, 0.1) !important;
+  transition: transform 0.2s ease, box-shadow 0.2s ease !important;
+}
+
+.moving-border-card:hover,
+.bg-white.rounded-2xl.border:hover,
+.bg-white.rounded-3xl.border:hover {
+  box-shadow: 0 10px 28px -4px rgba(99, 102, 241, 0.2) !important;
+}
+
+/* 2. Electric Indigo-Cyan Moving Border (Search bars, form cards, hero cards) */
+.moving-border-indigo,
+.bg-white.p-4.rounded-2xl.border,
+.bg-white.p-5.rounded-2xl.border,
+.bg-white.p-6.rounded-3xl.border {
+  position: relative !important;
+  background: 
+    linear-gradient(#ffffff, #ffffff) padding-box,
+    conic-gradient(from var(--border-angle), #4f46e5, #06b6d4, #3b82f6, #a855f7, #ec4899, #4f46e5) border-box !important;
+  border: 2px solid transparent !important;
+  animation: border-rotate 4s linear infinite !important;
+}
+
+/* 3. Golden Amber Moving Border (Update Banners, Warning Boxes, Premium Info) */
+.moving-border-amber,
+.bg-amber-50.rounded-2xl,
+.bg-yellow-50.rounded-2xl {
+  position: relative !important;
+  background: 
+    linear-gradient(#fef9c3, #fef9c3) padding-box,
+    conic-gradient(from var(--border-angle), #f59e0b, #eab308, #fbbf24, #d97706, #ef4444, #f59e0b) border-box !important;
+  border: 2px solid transparent !important;
+  animation: border-rotate 3s linear infinite !important;
+  box-shadow: 0 2px 12px -2px rgba(245, 158, 11, 0.18) !important;
+}
+
+/* 4. Emerald Green Moving Border (Performance Boxes, Active Metrics, Success States) */
+.moving-border-emerald,
+.bg-emerald-50.rounded-2xl,
+.bg-green-50.rounded-2xl {
+  position: relative !important;
+  background: 
+    linear-gradient(#f0fdf4, #f0fdf4) padding-box,
+    conic-gradient(from var(--border-angle), #10b981, #059669, #34d399, #06b6d4, #10b981) border-box !important;
+  border: 2px solid transparent !important;
+  animation: border-rotate 3.5s linear infinite !important;
+  box-shadow: 0 2px 12px -2px rgba(16, 185, 129, 0.15) !important;
+}
+
+/* 5. Dark Luxury Moving Border (Mentor Banner, Dark Admin Cards, Hero Containers) */
+.moving-border-dark,
+.bg-indigo-950.rounded-3xl {
+  position: relative !important;
+  background: 
+    linear-gradient(#1e1b4b, #1e1b4b) padding-box,
+    conic-gradient(from var(--border-angle), #818cf8, #38bdf8, #c084fc, #f472b6, #fbbf24, #818cf8) border-box !important;
+  border: 2px solid transparent !important;
+  animation: border-rotate 4.5s linear infinite !important;
+  box-shadow: 0 8px 30px -4px rgba(30, 27, 75, 0.35) !important;
+}
+
+/* 6. Subtle Light Slate / Gray Moving Border (Inner Metadata Grids, Inner Tiles) */
+.moving-border-subtle,
+.bg-slate-50.rounded-2xl.border {
+  position: relative !important;
+  background: 
+    linear-gradient(#f8fafc, #f8fafc) padding-box,
+    conic-gradient(from var(--border-angle), #94a3b8, #6366f1, #38bdf8, #a855f7, #94a3b8) border-box !important;
+  border: 1.5px solid transparent !important;
+  animation: border-rotate 4s linear infinite !important;
+}
+
+/* 7. Modal Windows Moving Border */
+.fixed .bg-white.rounded-3xl,
+.fixed .bg-white.rounded-card {
+  position: relative !important;
+  background: 
+    linear-gradient(#ffffff, #ffffff) padding-box,
+    conic-gradient(from var(--border-angle), #6366f1, #06b6d4, #10b981, #f59e0b, #ec4899, #8b5cf6, #6366f1) border-box !important;
+  border: 2.5px solid transparent !important;
+  animation: border-rotate 4s linear infinite !important;
+  box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* Toast Notification Animations */
+@keyframes slideInRight {
+  from {
+    transform: translateX(110%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes toastProgress {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}
+
+.animate-slideInRight {
+  animation: slideInRight 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-toastProgress {
+  animation-name: toastProgress;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
 }

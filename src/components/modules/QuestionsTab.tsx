@@ -15,7 +15,7 @@ import { useAdminData } from '../../context/AdminDataContext';
 import { Question, SubjectType, CorrectOption } from '../../types';
 
 export const QuestionsTab: React.FC = () => {
-  const { questions, saveQuestion, deleteQuestion, testSeries } = useAdminData();
+  const { questions, saveQuestion, deleteQuestion, testSeries, notifySuccess, notifyError, notifyWarning, notifyInfo, requestConfirm } = useAdminData();
 
   // Filters & Search
   const [selectedSubject, setSelectedSubject] = useState<string>('ALL');
@@ -76,7 +76,7 @@ export const QuestionsTab: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.questionText.trim()) {
-      alert('Question text cannot be empty');
+      notifyWarning('Question text cannot be empty');
       return;
     }
     await saveQuestion(formData);
@@ -131,14 +131,14 @@ export const QuestionsTab: React.FC = () => {
             <HelpCircle className="w-5 h-5 text-admin-primary" />
             CBT Question Bank Management
           </h2>
-          <p className="text-xs text-admin-muted mt-0.5">
+          <p className="text-sm text-admin-muted mt-0.5">
             Author and configure multiple-choice questions across Karnataka CET subjects with LaTeX support.
           </p>
         </div>
 
         <button
           onClick={handleOpenAdd}
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-button bg-admin-royal hover:bg-blue-700 text-white font-bold text-xs shadow transition-all active:scale-95"
+          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-button bg-admin-royal hover:bg-blue-700 text-white font-bold text-sm shadow transition-all active:scale-95"
         >
           <Plus className="w-4 h-4" />
           <span>Add New Question</span>
@@ -152,7 +152,7 @@ export const QuestionsTab: React.FC = () => {
             <button
               key={sub.value}
               onClick={() => setSelectedSubject(sub.value)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              className={`px-3 py-1.5 rounded-lg text-sm font-bold transition-all ${
                 selectedSubject === sub.value
                   ? 'bg-admin-tab text-white shadow-sm'
                   : 'bg-white text-slate-600 hover:bg-slate-100 border border-admin-cardBorder'
@@ -164,13 +164,13 @@ export const QuestionsTab: React.FC = () => {
         </div>
 
         <div className="relative min-w-[280px]">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
           <input
             type="text"
             placeholder="Search questions or keywords..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 bg-white border border-admin-cardBorder rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-admin-primary/20 focus:border-admin-primary"
+            className="w-full pl-9 pr-3 py-2 bg-white border border-admin-cardBorder rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-admin-primary/20 focus:border-admin-primary"
           />
         </div>
       </div>
@@ -188,7 +188,7 @@ export const QuestionsTab: React.FC = () => {
             <button
               type="button"
               onClick={handleAIGenerate}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-xs font-bold transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-sm font-bold transition-colors"
             >
               <Sparkles className="w-3.5 h-3.5 text-amber-600" />
               <span>Generate with AI</span>
@@ -198,11 +198,11 @@ export const QuestionsTab: React.FC = () => {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-admin-heading mb-1">Subject</label>
+                <label className="block text-sm font-semibold text-admin-heading mb-1">Subject</label>
                 <select
                   value={formData.subject}
                   onChange={(e) => setFormData({ ...formData, subject: e.target.value as SubjectType })}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-admin-primary"
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-admin-primary"
                 >
                   <option value="PHYSICS">PHYSICS</option>
                   <option value="CHEMISTRY">CHEMISTRY</option>
@@ -212,30 +212,30 @@ export const QuestionsTab: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-admin-heading mb-1">Question ID</label>
+                <label className="block text-sm font-semibold text-admin-heading mb-1">Question ID</label>
                 <input
                   type="number"
                   value={formData.id}
                   onChange={(e) => setFormData({ ...formData, id: Number(e.target.value) })}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium"
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium"
                   required
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-admin-heading mb-1">Test Set ID</label>
+                <label className="block text-sm font-semibold text-admin-heading mb-1">Test Set ID</label>
                 <input
                   type="text"
                   value={formData.testSetId}
                   onChange={(e) => setFormData({ ...formData, testSetId: e.target.value })}
                   placeholder="e.g. mock-full-01"
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium"
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-admin-heading mb-1">
+              <label className="block text-sm font-semibold text-admin-heading mb-1">
                 Question Text (Supports LaTeX e.g. \frac&#123;a&#125;&#123;b&#125;, \sqrt&#123;&#125;)
               </label>
               <textarea
@@ -243,13 +243,13 @@ export const QuestionsTab: React.FC = () => {
                 value={formData.questionText}
                 onChange={(e) => setFormData({ ...formData, questionText: e.target.value })}
                 placeholder="Enter complete question statement here..."
-                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white"
+                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:bg-white"
                 required
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-admin-heading mb-1">
+              <label className="block text-sm font-semibold text-admin-heading mb-1">
                 Diagram / Image URL (Optional)
               </label>
               <div className="flex gap-2">
@@ -258,10 +258,10 @@ export const QuestionsTab: React.FC = () => {
                   value={formData.imageUrl || ''}
                   onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
                   placeholder="https://... image link for circuit/diagram"
-                  className="flex-1 p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium"
+                  className="flex-1 p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium"
                 />
                 {formData.imageUrl && (
-                  <a href={formData.imageUrl} target="_blank" rel="noreferrer" className="p-2.5 bg-slate-100 rounded-xl text-xs font-semibold text-blue-600 hover:underline">
+                  <a href={formData.imageUrl} target="_blank" rel="noreferrer" className="p-2.5 bg-slate-100 rounded-xl text-sm font-semibold text-blue-600 hover:underline">
                     Preview
                   </a>
                 )}
@@ -271,49 +271,49 @@ export const QuestionsTab: React.FC = () => {
             {/* Options A, B, C, D */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
               <div>
-                <label className="block text-xs font-semibold text-admin-heading mb-1">Option A</label>
+                <label className="block text-sm font-semibold text-admin-heading mb-1">Option A</label>
                 <input
                   type="text"
                   value={formData.optionA}
                   onChange={(e) => setFormData({ ...formData, optionA: e.target.value })}
                   placeholder="Option A text"
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs"
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm"
                   required
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-admin-heading mb-1">Option B</label>
+                <label className="block text-sm font-semibold text-admin-heading mb-1">Option B</label>
                 <input
                   type="text"
                   value={formData.optionB}
                   onChange={(e) => setFormData({ ...formData, optionB: e.target.value })}
                   placeholder="Option B text"
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs"
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm"
                   required
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-admin-heading mb-1">Option C</label>
+                <label className="block text-sm font-semibold text-admin-heading mb-1">Option C</label>
                 <input
                   type="text"
                   value={formData.optionC}
                   onChange={(e) => setFormData({ ...formData, optionC: e.target.value })}
                   placeholder="Option C text"
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs"
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm"
                   required
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-admin-heading mb-1">Option D</label>
+                <label className="block text-sm font-semibold text-admin-heading mb-1">Option D</label>
                 <input
                   type="text"
                   value={formData.optionD}
                   onChange={(e) => setFormData({ ...formData, optionD: e.target.value })}
                   placeholder="Option D text"
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs"
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm"
                   required
                 />
               </div>
@@ -321,11 +321,11 @@ export const QuestionsTab: React.FC = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
               <div>
-                <label className="block text-xs font-semibold text-admin-heading mb-1">Correct Option</label>
+                <label className="block text-sm font-semibold text-admin-heading mb-1">Correct Option</label>
                 <select
                   value={formData.correctOption}
                   onChange={(e) => setFormData({ ...formData, correctOption: e.target.value as CorrectOption })}
-                  className="w-full p-2.5 bg-emerald-50 border border-emerald-300 rounded-xl text-xs font-bold text-emerald-900"
+                  className="w-full p-2.5 bg-emerald-50 border border-emerald-300 rounded-xl text-sm font-bold text-emerald-900"
                 >
                   <option value="A">Option A</option>
                   <option value="B">Option B</option>
@@ -342,7 +342,7 @@ export const QuestionsTab: React.FC = () => {
                   onChange={(e) => setFormData({ ...formData, isPremium: e.target.checked })}
                   className="w-4 h-4 rounded text-admin-primary focus:ring-admin-primary"
                 />
-                <label htmlFor="premQuestion" className="text-xs font-bold text-admin-heading flex items-center gap-1.5 cursor-pointer">
+                <label htmlFor="premQuestion" className="text-sm font-bold text-admin-heading flex items-center gap-1.5 cursor-pointer">
                   <Crown className="w-3.5 h-3.5 text-amber-500" />
                   Premium Only Access
                 </label>
@@ -350,7 +350,7 @@ export const QuestionsTab: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-admin-heading mb-1">
+              <label className="block text-sm font-semibold text-admin-heading mb-1">
                 Detailed Step-by-Step Explanation
               </label>
               <textarea
@@ -358,7 +358,7 @@ export const QuestionsTab: React.FC = () => {
                 value={formData.explanation}
                 onChange={(e) => setFormData({ ...formData, explanation: e.target.value })}
                 placeholder="Include formulas, theorems and step-by-step derivation..."
-                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium"
+                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium"
                 required
               />
             </div>
@@ -367,13 +367,13 @@ export const QuestionsTab: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setIsFormOpen(false)}
-                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100"
+                className="px-4 py-2 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-100"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="px-5 py-2 rounded-xl text-xs font-bold bg-admin-primary hover:bg-indigo-700 text-white shadow-md"
+                className="px-5 py-2 rounded-xl text-sm font-bold bg-admin-primary hover:bg-indigo-700 text-white shadow-md"
               >
                 Save Question
               </button>
@@ -397,7 +397,7 @@ export const QuestionsTab: React.FC = () => {
             >
               <div className="flex items-start justify-between gap-4 mb-2">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-800">
+                  <span className="text-sm font-mono font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-800">
                     #{q.id}
                   </span>
                   <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
@@ -414,7 +414,7 @@ export const QuestionsTab: React.FC = () => {
                       PREMIUM
                     </span>
                   )}
-                  <span className="text-[11px] text-slate-400">
+                  <span className="text-[11px] text-slate-500">
                     Set: {q.testSetId}
                   </span>
                 </div>
@@ -453,7 +453,7 @@ export const QuestionsTab: React.FC = () => {
               )}
 
               {/* Options Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs mb-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm mb-3">
                 <div className={`p-2.5 rounded-lg border ${
                   q.correctOption === 'A' ? 'bg-emerald-50 border-emerald-300 font-bold text-emerald-950' : 'bg-slate-50 border-slate-200'
                 }`}>
@@ -477,7 +477,7 @@ export const QuestionsTab: React.FC = () => {
               </div>
 
               {/* Explanation Note */}
-              <div className="bg-slate-50 border-l-4 border-emerald-500 p-2.5 rounded-r-lg text-xs text-slate-700">
+              <div className="bg-slate-50 border-l-4 border-emerald-500 p-2.5 rounded-r-lg text-sm text-slate-700">
                 <span className="font-bold text-emerald-800">Explanation (Correct: {q.correctOption}): </span>
                 {q.explanation}
               </div>
@@ -488,3 +488,4 @@ export const QuestionsTab: React.FC = () => {
     </div>
   );
 };
+

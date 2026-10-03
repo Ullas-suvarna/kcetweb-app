@@ -21,6 +21,15 @@ import {
   Auth
 } from 'firebase/auth';
 
+import { 
+  getDatabase, 
+  ref, 
+  set as rtdbSet, 
+  get as rtdbGet, 
+  onValue, 
+  Database 
+} from 'firebase/database';
+
 export const defaultFirebaseConfig = {
   apiKey: "AIzaSyCFYIawcvcSu4aDbx919KeP220SB1jspqQ",
   authDomain: "kcet-app-c0457.firebaseapp.com",
@@ -49,6 +58,7 @@ const activeConfig = getStoredFirebaseConfig();
 
 export const app = !getApps().length ? initializeApp(activeConfig) : getApp();
 export const db: Firestore = getFirestore(app);
+export const rtdb: Database = getDatabase(app);
 export const auth: Auth = getAuth(app);
 
 export const ADMIN_IDENTIFIER = 'ullassuvarna65@gmail.com';
@@ -65,6 +75,11 @@ export {
   writeBatch,
   signInWithEmailAndPassword,
   signOut,
-  onAuthStateChanged
+  onAuthStateChanged,
+  ref,
+  rtdbSet,
+  rtdbGet,
+  onValue
 };
 export type { FirebaseUser };
+

@@ -1,595 +1,3240 @@
 import React, { useState } from 'react';
+
+
+
 import { 
-  Users2, 
-  Plus, 
-  Star, 
-  Calendar, 
+
+
+
+  MessageSquare, 
+
+
+
+  Users, 
+
+
+
+  CheckCircle2, 
+
+
+
   Clock, 
-  CheckCircle, 
-  XCircle, 
-  RotateCcw, 
-  Mail, 
-  Instagram, 
+
+
+
+  Plus, 
+
+
+
   Trash2, 
-  MessageSquare,
-  AlertCircle
+
+
+
+  Edit3, 
+
+
+
+  ExternalLink, 
+
+
+
+  Phone, 
+
+
+
+  Mail, 
+
+
+
+  Instagram, 
+
+
+
+  Star, 
+
+
+
+  ChevronDown, 
+
+
+
+  Info, 
+
+
+
+  Calendar, 
+
+
+
+  DollarSign, 
+
+
+
+  ShieldCheck, 
+
+
+
+  X,
+
+
+
+  RefreshCw,
+
+
+
+  Search
+
+
+
 } from 'lucide-react';
+
+
+
 import { useAdminData } from '../../context/AdminDataContext';
+
+
+
 import { Mentor, SeniorChatBooking, BookingStatus } from '../../types';
 
+
+
+
+
+
+
 export const MentorsTab: React.FC = () => {
-  const { mentors, bookings, saveMentor, deleteMentor, updateBooking, sendBroadcast } = useAdminData();
 
-  // Active view: "bookings" or "mentors"
-  const [subSection, setSubSection] = useState<'bookings' | 'mentors'>('bookings');
-  const [statusFilter, setStatusFilter] = useState<string>('ALL');
 
-  // Add Mentor Modal
+
+  const { mentors, bookings, saveMentor, deleteMentor, saveBooking, deleteBooking, sendBroadcast, notifySuccess, notifyError, notifyWarning, notifyInfo, requestConfirm } = useAdminData();
+
+
+
+
+
+
+
+  // Active Main Tab: "bookings" | "mentors"
+
+
+
+  const [activeMainTab, setActiveMainTab] = useState<'bookings' | 'mentors'>('bookings');
+
+
+
+
+
+
+
+  // Bookings Filter Pill: "all" | "pending" | "confirmed" | "unassigned"
+
+
+
+  const [bookingFilter, setBookingFilter] = useState<'all' | 'pending' | 'confirmed' | 'unassigned'>('all');
+
+
+
+
+
+
+
+  // Local state for each booking's assigned mentor and admin message
+
+
+
+  const [selectedMentorsMap, setSelectedMentorsMap] = useState<Record<string, string>>({});
+
+
+
+  const [adminNotesMap, setAdminNotesMap] = useState<Record<string, string>>({});
+
+
+
+
+
+
+
+  // Add / Edit Mentor Modal State
+
+
+
   const [isMentorModalOpen, setIsMentorModalOpen] = useState(false);
-  const [mentorForm, setMentorForm] = useState<Mentor>({
-    id: `m-${Date.now()}`,
+
+
+
+  const [editingMentorId, setEditingMentorId] = useState<string | null>(null);
+
+
+
+  const [mentorFormData, setMentorFormData] = useState<Mentor>({
+
+
+
+    id: `mentor-${Date.now()}`,
+
+
+
     name: '',
-    branch: '',
-    college: '',
-    currentYear: '3rd Year B.Tech',
-    kcetRank: 'KCET Rank #',
+
+
+
+    branch: 'Computer Science & Engineering',
+
+
+
+    college: 'R.V. College of Engineering (RVCE)',
+
+
+
+    currentYear: '3rd Year B.E.',
+
+
+
+    kcetRank: 'Rank #450',
+
+
+
     rating: 4.9,
-    bio: '',
+
+
+
+    bio: 'Guided 80+ KCET aspirants for Option Entry and Counselling.',
+
+
+
     email: '',
+
+
+
     instagram: '',
-    photoUrl: ''
+
+
+
+    photoUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=800&q=80'
+
+
+
   });
 
-  // Action Dialog for booking status change
-  const [activeBooking, setActiveBooking] = useState<SeniorChatBooking | null>(null);
-  const [actionType, setActionType] = useState<'confirm' | 'reschedule' | 'reject' | 'message' | null>(null);
-  const [actionInput, setActionInput] = useState('');
 
-  const statuses: BookingStatus[] = [
-    'Under Verification',
-    'Waiting for Senior Confirmation',
-    'Confirmed',
-    'Reschedule Needed',
-    'Declined',
-    'Expired'
-  ];
 
-  const handleOpenAddMentor = () => {
-    setMentorForm({
-      id: `m-${Date.now()}`,
-      name: '',
-      branch: 'Computer Science & Engineering',
-      college: 'RV College of Engineering (RVCE)',
-      currentYear: '3rd Year B.Tech',
-      kcetRank: 'KCET Rank #150',
-      rating: 4.9,
-      bio: '',
-      email: '',
-      instagram: '',
-      photoUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80'
-    });
-    setIsMentorModalOpen(true);
-  };
 
-  const handleSaveMentor = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!mentorForm.name.trim()) return;
-    await saveMentor(mentorForm);
-    setIsMentorModalOpen(false);
-  };
 
-  const handleExecuteBookingAction = async () => {
-    if (!activeBooking) return;
 
-    if (actionType === 'confirm') {
-      await updateBooking({
-        ...activeBooking,
-        status: 'Confirmed',
-        adminMessage: actionInput || 'Your senior mentoring call is confirmed. Link will be sent 30 mins before.'
-      });
-      await sendBroadcast({
-        title: 'Mentoring Booking Confirmed! ??',
-        message: `Your session with ${activeBooking.mentorName} on ${activeBooking.selectedDate} (${activeBooking.selectedTime}) is confirmed.`,
-        type: 'BOOKING',
-        targetUserId: activeBooking.userId,
-        targetUserEmail: activeBooking.userEmail
-      });
-    } else if (actionType === 'reschedule') {
-      await updateBooking({
-        ...activeBooking,
-        status: 'Reschedule Needed',
-        adminMessage: actionInput || 'Mentor is unavailable at requested time. Please pick a new slot.'
-      });
-      await sendBroadcast({
-        title: 'Action Needed: Reschedule Mentoring Session',
-        message: `Senior mentor requested reschedule: "${actionInput}". Please choose a new slot.`,
-        type: 'BOOKING',
-        targetUserId: activeBooking.userId,
-        targetUserEmail: activeBooking.userEmail
-      });
-    } else if (actionType === 'reject') {
-      if (!actionInput.trim()) {
-        alert('Please specify a rejection reason.');
-        return;
-      }
-      await updateBooking({
-        ...activeBooking,
-        status: 'Declined',
-        rejectionReason: actionInput
-      });
-      await sendBroadcast({
-        title: 'Mentoring Booking Declined',
-        message: `Your booking was declined: ${actionInput}. Refund initiated if applicable.`,
-        type: 'BOOKING',
-        targetUserId: activeBooking.userId,
-        targetUserEmail: activeBooking.userEmail
-      });
-    } else if (actionType === 'message') {
-      await updateBooking({
-        ...activeBooking,
-        adminMessage: actionInput
-      });
-      await sendBroadcast({
-        title: `Message from KCET Gen Z Desk (${activeBooking.mentorName})`,
-        message: actionInput,
-        type: 'BOOKING',
-        targetUserId: activeBooking.userId,
-        targetUserEmail: activeBooking.userEmail
-      });
-    }
 
-    setActiveBooking(null);
-    setActionType(null);
-    setActionInput('');
-  };
+  // Selected Mentor Detail Modal
+
+
+
+  const [detailMentor, setDetailMentor] = useState<Mentor | null>(null);
+
+
+
+
+
+
+
+  // Counters
+
+
+
+  const totalMentors = mentors.length;
+
+
+
+  const confirmedBookings = bookings.filter(b => b.status === 'Confirmed').length;
+
+
+
+  const pendingBookings = bookings.filter(b => b.status === 'Under Verification' || b.status === 'Waiting for Senior Confirmation').length;
+
+
+
+  const unassignedBookings = bookings.filter(b => !b.assignedMentorEmail || b.assignedMentorEmail.trim() === '').length;
+
+
+
+
+
+
+
+  // Filter Bookings List
+
+
 
   const filteredBookings = bookings.filter(b => {
-    if (statusFilter === 'ALL') return true;
-    return b.status === statusFilter;
+
+
+
+    if (bookingFilter === 'confirmed') return b.status === 'Confirmed';
+
+
+
+    if (bookingFilter === 'pending') return b.status === 'Under Verification' || b.status === 'Waiting for Senior Confirmation';
+
+
+
+    if (bookingFilter === 'unassigned') return !b.assignedMentorEmail || b.assignedMentorEmail.trim() === '';
+
+
+
+    return true;
+
+
+
   });
 
+
+
+
+
+
+
+  // Action: Verify Payment & Assign Mentor
+
+
+
+  const handleVerifyPaymentAndAssign = async (booking: SeniorChatBooking) => {
+
+
+
+    const assignedMentorName = selectedMentorsMap[booking.bookingId] || booking.mentorName || (mentors[0]?.name || 'Ullas');
+
+
+
+    const mentorObj = mentors.find(m => m.name === assignedMentorName);
+
+
+
+
+
+
+
+    const updated: SeniorChatBooking = {
+
+
+
+      ...booking,
+
+
+
+      mentorName: assignedMentorName,
+
+
+
+      assignedMentorEmail: mentorObj?.email || 'mentor@kcetgenz.com',
+
+
+
+      status: 'Waiting for Senior Confirmation',
+
+
+
+      adminMessage: adminNotesMap[booking.bookingId] || 'Payment verified. Mentor assigned for your session.'
+
+
+
+    };
+
+
+
+
+
+
+
+    await saveBooking(updated);
+
+
+
+
+
+
+
+    await sendBroadcast({
+
+
+
+      title: 'Mentor Assigned for 1-on-1 Chat',
+
+
+
+      message: `Your payment of ₹${booking.amountPaid} is verified. ${assignedMentorName} is assigned for ${booking.selectedDate} at ${booking.selectedTime}.`,
+
+
+
+      type: 'BOOKING',
+
+
+
+      targetUserId: booking.userId,
+
+
+
+      targetUserEmail: booking.userEmail
+
+
+
+    });
+
+
+
+
+
+
+
+    notifySuccess(`Payment verified and assigned ${assignedMentorName} for ${booking.userName}!`, 'Booking Confirmed');
+
+
+
+  };
+
+
+
+
+
+
+
+  // Action: Confirm Slot
+
+
+
+  const handleConfirmSlot = async (booking: SeniorChatBooking) => {
+
+
+
+    const assignedMentorName = selectedMentorsMap[booking.bookingId] || booking.mentorName || (mentors[0]?.name || 'Ullas');
+
+
+
+    const mentorObj = mentors.find(m => m.name === assignedMentorName);
+
+
+
+
+
+
+
+    const updated: SeniorChatBooking = {
+
+
+
+      ...booking,
+
+
+
+      mentorName: assignedMentorName,
+
+
+
+      assignedMentorEmail: mentorObj?.email || booking.assignedMentorEmail || 'mentor@kcetgenz.com',
+
+
+
+      status: 'Confirmed',
+
+
+
+      adminMessage: adminNotesMap[booking.bookingId] || 'Your senior mentoring call is confirmed.'
+
+
+
+    };
+
+
+
+
+
+
+
+    await saveBooking(updated);
+
+
+
+
+
+
+
+    await sendBroadcast({
+
+
+
+      title: 'Senior Mentoring Session Confirmed! 🎉',
+
+
+
+      message: `Your session with ${assignedMentorName} on ${booking.selectedDate} (${booking.selectedTime}) is confirmed.`,
+
+
+
+      type: 'BOOKING',
+
+
+
+      targetUserId: booking.userId,
+
+
+
+      targetUserEmail: booking.userEmail
+
+
+
+    });
+
+
+
+
+
+
+
+    notifySuccess(`Slot Confirmed for ${booking.userName}!`, 'Slot Confirmed');
+
+
+
+  };
+
+
+
+
+
+
+
+  // Action: Suggest Other Time
+
+
+
+  const handleSuggestOtherTime = async (booking: SeniorChatBooking) => {
+
+
+
+    const note = prompt('Enter suggested date/time for the student:', '2026-04-14 at 07:00 PM');
+
+
+
+    if (!note) return;
+
+
+
+
+
+
+
+    const updated: SeniorChatBooking = {
+
+
+
+      ...booking,
+
+
+
+      status: 'Reschedule Needed',
+
+
+
+      adminMessage: `Reschedule Requested: ${note}`
+
+
+
+    };
+
+
+
+
+
+
+
+    await saveBooking(updated);
+
+
+
+
+
+
+
+    await sendBroadcast({
+
+
+
+      title: 'Senior Chat Reschedule Requested',
+
+
+
+      message: `Admin requested a time adjustment for your mentoring session: ${note}. Please check your app.`,
+
+
+
+      type: 'BOOKING',
+
+
+
+      targetUserId: booking.userId,
+
+
+
+      targetUserEmail: booking.userEmail
+
+
+
+    });
+
+
+
+  };
+
+
+
+
+
+
+
+  // Action: Decline Booking
+
+
+
+  const handleDecline = async (booking: SeniorChatBooking) => {
+
+
+
+    const reason = prompt('Reason for declining this senior booking:', 'Mentor unavailable / Invalid payment UTR');
+
+
+
+    if (!reason) return;
+
+
+
+
+
+
+
+    const updated: SeniorChatBooking = {
+
+
+
+      ...booking,
+
+
+
+      status: 'Declined',
+
+
+
+      rejectionReason: reason,
+
+
+
+      adminMessage: `Booking Declined: ${reason}`
+
+
+
+    };
+
+
+
+
+
+
+
+    await saveBooking(updated);
+
+
+
+
+
+
+
+    await sendBroadcast({
+
+
+
+      title: 'Mentoring Booking Declined',
+
+
+
+      message: `Your booking could not be confirmed. Reason: ${reason}. Refund will be initiated if applicable.`,
+
+
+
+      type: 'BOOKING',
+
+
+
+      targetUserId: booking.userId,
+
+
+
+      targetUserEmail: booking.userEmail
+
+
+
+    });
+
+
+
+  };
+
+
+
+
+
+
+
+  // Action: End 1-on-1 Chat Session
+
+
+
+  const handleEndChatSession = async (booking: SeniorChatBooking) => {
+
+
+
+    if (confirm(`End 1-on-1 chat session for ${booking.userName}? This will archive the live room.`)) {
+
+
+
+      const updated: SeniorChatBooking = {
+
+
+
+        ...booking,
+
+
+
+        status: 'Expired',
+
+
+
+        adminMessage: 'Mentorship session concluded successfully.'
+
+
+
+      };
+
+
+
+      await saveBooking(updated);
+
+
+
+    }
+
+
+
+  };
+
+
+
+
+
+
+
+  // Action: Save Mentor (Modal)
+
+
+
+  const handleSaveMentorForm = async (e: React.FormEvent) => {
+
+
+
+    e.preventDefault();
+
+
+
+    if (!mentorFormData.name.trim()) return;
+
+
+
+    await saveMentor(mentorFormData);
+
+
+
+    setIsMentorModalOpen(false);
+
+
+
+  };
+
+
+
+
+
+
+
+  const handleOpenAddMentor = () => {
+
+
+
+    setEditingMentorId(null);
+
+
+
+    setMentorFormData({
+
+
+
+      id: `mentor-${Date.now()}`,
+
+
+
+      name: '',
+
+
+
+      branch: 'Computer Science & Engineering',
+
+
+
+      college: 'R.V. College of Engineering (RVCE)',
+
+
+
+      currentYear: '3rd Year B.E.',
+
+
+
+      kcetRank: 'Rank #450',
+
+
+
+      rating: 4.9,
+
+
+
+      bio: 'Guided 80+ KCET aspirants for Option Entry and Counselling.',
+
+
+
+      email: '',
+
+
+
+      instagram: '',
+
+
+
+      photoUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=800&q=80'
+
+
+
+    });
+
+
+
+    setIsMentorModalOpen(true);
+
+
+
+  };
+
+
+
+
+
+
+
   return (
-    <div className="space-y-6">
-      {/* Header Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-card border border-admin-cardBorder shadow-sm">
-        <div>
-          <h2 className="text-lg font-bold text-admin-heading flex items-center gap-2">
-            <Users2 className="w-5 h-5 text-admin-primary" />
-            Senior Engineering Mentors & Live Counseling
+
+
+
+    <div className="w-full space-y-6 animate-fadeIn pb-16">
+
+
+
+      {/* ============================================================ */}
+
+
+
+      {/* 1. Top Dark Card: Senior Mentorship & Chat Management        */}
+
+
+
+      {/* ============================================================ */}
+
+
+
+      <div className="bg-[#1E1B4B] text-white rounded-3xl p-6 shadow-md space-y-4">
+
+
+
+        <div className="space-y-1">
+
+
+
+          <h2 className="text-base sm:text-lg font-black tracking-tight flex items-center gap-2 text-white">
+
+
+
+            <span className="text-xl">💬</span>
+
+
+
+            Senior Mentorship & Chat Management
+
+
+
           </h2>
-          <p className="text-xs text-admin-muted mt-0.5">
-            Manage top Karnataka ranker mentors and moderate 1-on-1 student counseling bookings.
+
+
+
+          <p className="text-sm text-indigo-200 font-medium">
+
+
+
+            Review registered mentors, inspect credentials, and assign mentors to students.
+
+
+
           </p>
+
+
+
         </div>
 
-        <div className="flex items-center gap-2">
-          {/* Sub Navigation toggle */}
-          <div className="flex p-1 bg-slate-100 rounded-xl">
-            <button
-              onClick={() => setSubSection('bookings')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                subSection === 'bookings' ? 'bg-white text-admin-primary shadow-sm' : 'text-slate-600'
-              }`}
-            >
-              Bookings ({bookings.length})
-            </button>
-            <button
-              onClick={() => setSubSection('mentors')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                subSection === 'mentors' ? 'bg-white text-admin-primary shadow-sm' : 'text-slate-600'
-              }`}
-            >
-              Mentors Directory ({mentors.length})
-            </button>
+
+
+
+
+
+
+        {/* 3 Metric Cards inside Dark Header */}
+
+
+
+        <div className="grid grid-cols-3 gap-3 pt-1">
+
+
+
+          {/* Card 1: Mentors */}
+
+
+
+          <div className="bg-[#2E2A72]/70 border border-indigo-500/30 rounded-2xl p-3 text-center space-y-0.5">
+
+
+
+            <span className="text-[11px] font-bold text-indigo-200 flex items-center justify-center gap-1">
+
+
+
+              <span>👨‍🏫</span> Mentors
+
+
+
+            </span>
+
+
+
+            <span className="text-xl sm:text-2xl font-black text-white block">
+
+
+
+              {totalMentors}
+
+
+
+            </span>
+
+
+
           </div>
 
-          <button
-            onClick={handleOpenAddMentor}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-button bg-admin-royal hover:bg-blue-700 text-white font-bold text-xs shadow transition-all"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Add Mentor</span>
-          </button>
+
+
+
+
+
+
+          {/* Card 2: Confirmed */}
+
+
+
+          <div className="bg-[#2E2A72]/70 border border-indigo-500/30 rounded-2xl p-3 text-center space-y-0.5">
+
+
+
+            <span className="text-[11px] font-bold text-indigo-200 flex items-center justify-center gap-1">
+
+
+
+              <span>🎯</span> Confirmed
+
+
+
+            </span>
+
+
+
+            <span className="text-xl sm:text-2xl font-black text-[#10B981] block">
+
+
+
+              {confirmedBookings}
+
+
+
+            </span>
+
+
+
+          </div>
+
+
+
+
+
+
+
+          {/* Card 3: Pending */}
+
+
+
+          <div className="bg-[#2E2A72]/70 border border-indigo-500/30 rounded-2xl p-3 text-center space-y-0.5">
+
+
+
+            <span className="text-[11px] font-bold text-indigo-200 flex items-center justify-center gap-1">
+
+
+
+              <span>📫</span> Pending
+
+
+
+            </span>
+
+
+
+            <span className="text-xl sm:text-2xl font-black text-[#FBBF24] block">
+
+
+
+              {pendingBookings}
+
+
+
+            </span>
+
+
+
+          </div>
+
+
+
         </div>
+
+
+
       </div>
 
-      {/* SECTION 1: BOOKINGS */}
-      {subSection === 'bookings' && (
+
+
+
+
+
+
+      {/* ============================================================ */}
+
+
+
+      {/* 2. Main Tab Buttons: Student Bookings vs Registered Mentors */}
+
+
+
+      {/* ============================================================ */}
+
+
+
+      <div className="grid grid-cols-2 gap-3">
+
+
+
+        {/* Tab 1: Student Bookings */}
+
+
+
+        <button
+
+
+
+          onClick={() => setActiveMainTab('bookings')}
+
+
+
+          className={`h-12 rounded-2xl text-sm font-black shadow-sm transition-all flex items-center justify-center gap-2 ${
+
+
+
+            activeMainTab === 'bookings'
+
+
+
+              ? 'bg-[#4F46E5] text-white shadow-md'
+
+
+
+              : 'bg-white hover:bg-slate-50 text-slate-700 border border-slate-200'
+
+
+
+          }`}
+
+
+
+        >
+
+
+
+          <span>🧾</span>
+
+
+
+          <span>Student Bookings ({bookings.length})</span>
+
+
+
+        </button>
+
+
+
+
+
+
+
+        {/* Tab 2: Registered Mentors */}
+
+
+
+        <button
+
+
+
+          onClick={() => setActiveMainTab('mentors')}
+
+
+
+          className={`h-12 rounded-2xl text-sm font-black shadow-sm transition-all flex items-center justify-center gap-2 ${
+
+
+
+            activeMainTab === 'mentors'
+
+
+
+              ? 'bg-[#4F46E5] text-white shadow-md'
+
+
+
+              : 'bg-white hover:bg-slate-50 text-slate-700 border border-slate-200'
+
+
+
+          }`}
+
+
+
+        >
+
+
+
+          <span>🎓</span>
+
+
+
+          <span>Registered Mentors ({mentors.length})</span>
+
+
+
+        </button>
+
+
+
+      </div>
+
+
+
+
+
+
+
+      {/* ============================================================ */}
+
+
+
+      {/* TAB 1: Student Bookings View                                 */}
+
+
+
+      {/* ============================================================ */}
+
+
+
+      {activeMainTab === 'bookings' && (
+
+
+
         <div className="space-y-4">
-          {/* Filter Chips */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+
+
+
+          {/* Sub-Filter Pills */}
+
+
+
+          <div className="flex items-center gap-2 overflow-x-auto pb-1">
+
+
+
             <button
-              onClick={() => setStatusFilter('ALL')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${
-                statusFilter === 'ALL'
-                  ? 'bg-admin-tab text-white'
-                  : 'bg-white text-slate-600 border border-admin-cardBorder'
+
+
+
+              onClick={() => setBookingFilter('all')}
+
+
+
+              className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${
+
+
+
+                bookingFilter === 'all'
+
+
+
+                  ? 'bg-[#EEF2FF] text-[#4F46E5] border border-indigo-200 font-black'
+
+
+
+                  : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-50'
+
+
+
               }`}
+
+
+
             >
-              All Bookings ({bookings.length})
+
+
+
+              All ({bookings.length})
+
+
+
             </button>
-            {statuses.map(st => (
-              <button
-                key={st}
-                onClick={() => setStatusFilter(st)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${
-                  statusFilter === st
-                    ? 'bg-admin-tab text-white'
-                    : 'bg-white text-slate-600 border border-admin-cardBorder'
-                }`}
-              >
-                {st}
-              </button>
-            ))}
-          </div>
 
-          {/* Bookings List Cards */}
-          <div className="space-y-3">
-            {filteredBookings.length === 0 ? (
-              <div className="bg-white p-12 text-center rounded-card border border-admin-cardBorder text-slate-400">
-                No bookings found for the selected status.
-              </div>
-            ) : (
-              filteredBookings.map(b => (
-                <div
-                  key={b.bookingId}
-                  className="bg-white rounded-card border border-admin-cardBorder p-5 shadow-sm hover:shadow transition-shadow"
-                >
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-700">
-                          {b.bookingId}
-                        </span>
-                        <h4 className="font-bold text-sm text-admin-heading">
-                          {b.userName}
-                        </h4>
-                        <span className="text-xs text-slate-400">({b.userEmail})</span>
-                      </div>
-                      <div className="text-xs text-slate-500 mt-1 flex items-center gap-3">
-                        <span>Assigned Mentor: <strong className="text-indigo-700">{b.mentorName}</strong></span>
-                        <span>�</span>
-                        <span>Fee: <strong className="text-emerald-700">?{b.amountPaid}</strong></span>
-                        <span>�</span>
-                        <span className="font-mono text-[11px] text-slate-400">Ref: {b.paymentRefNumber}</span>
-                      </div>
-                    </div>
 
-                    <span className={`self-start sm:self-auto text-xs font-bold px-3 py-1 rounded-full ${
-                      b.status === 'Confirmed' ? 'bg-emerald-100 text-emerald-800' :
-                      b.status === 'Waiting for Senior Confirmation' ? 'bg-amber-100 text-amber-900' :
-                      b.status === 'Under Verification' ? 'bg-blue-100 text-blue-900' :
-                      b.status === 'Reschedule Needed' ? 'bg-purple-100 text-purple-900' :
-                      'bg-red-100 text-red-800'
-                    }`}>
-                      {b.status}
-                    </span>
-                  </div>
 
-                  <div className="py-3 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
-                    <div className="flex items-center gap-4 text-slate-600">
-                      <span className="flex items-center gap-1.5">
-                        <Calendar className="w-4 h-4 text-indigo-500" />
-                        Date: <strong>{b.selectedDate}</strong>
-                      </span>
-                      <span className="flex items-center gap-1.5">
-                        <Clock className="w-4 h-4 text-blue-500" />
-                        Time: <strong>{b.selectedTime}</strong>
-                      </span>
-                    </div>
 
-                    {b.adminMessage && (
-                      <div className="text-[11px] bg-slate-50 px-2.5 py-1 rounded border border-slate-200 text-slate-600">
-                        Admin Note: {b.adminMessage}
-                      </div>
-                    )}
-                  </div>
 
-                  {/* Actions Bar */}
-                  <div className="pt-3 border-t border-slate-100 flex items-center gap-2 flex-wrap justify-end">
-                    <button
-                      onClick={() => {
-                        setActiveBooking(b);
-                        setActionType('confirm');
-                        setActionInput('Your senior mentoring call is confirmed. Google Meet link will be dispatched 30 mins prior.');
-                      }}
-                      className="px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold border border-emerald-200 transition-colors flex items-center gap-1"
-                    >
-                      <CheckCircle className="w-3.5 h-3.5" />
-                      Confirm
-                    </button>
 
-                    <button
-                      onClick={() => {
-                        setActiveBooking(b);
-                        setActionType('reschedule');
-                        setActionInput('Senior mentor is occupied with university exams. Please select another slot.');
-                      }}
-                      className="px-3 py-1.5 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-800 text-xs font-bold border border-purple-200 transition-colors flex items-center gap-1"
-                    >
-                      <RotateCcw className="w-3.5 h-3.5" />
-                      Reschedule
-                    </button>
 
-                    <button
-                      onClick={() => {
-                        setActiveBooking(b);
-                        setActionType('reject');
-                        setActionInput('Invalid transaction reference number.');
-                      }}
-                      className="px-3 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-800 text-xs font-bold border border-red-200 transition-colors flex items-center gap-1"
-                    >
-                      <XCircle className="w-3.5 h-3.5" />
-                      Decline
-                    </button>
+            <button
 
-                    <button
-                      onClick={() => {
-                        setActiveBooking(b);
-                        setActionType('message');
-                        setActionInput('');
-                      }}
-                      className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors flex items-center gap-1"
-                    >
-                      <MessageSquare className="w-3.5 h-3.5" />
-                      Direct Msg
-                    </button>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      )}
 
-      {/* SECTION 2: MENTORS DIRECTORY */}
-      {subSection === 'mentors' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {mentors.map(m => (
-            <div
-              key={m.id}
-              className="bg-white rounded-card border border-admin-cardBorder p-5 shadow-sm hover:shadow transition-shadow flex gap-4"
+
+              onClick={() => setBookingFilter('pending')}
+
+
+
+              className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${
+
+
+
+                bookingFilter === 'pending'
+
+
+
+                  ? 'bg-[#EEF2FF] text-[#4F46E5] border border-indigo-200 font-black'
+
+
+
+                  : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-50'
+
+
+
+              }`}
+
+
+
             >
-              <img
-                src={m.photoUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80'}
-                alt={m.name}
-                className="w-16 h-16 rounded-xl object-cover shrink-0 border border-slate-200"
-              />
-              <div className="flex-1">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h4 className="font-bold text-sm text-admin-heading">{m.name}</h4>
-                    <p className="text-xs text-indigo-700 font-semibold">{m.kcetRank}</p>
-                  </div>
-                  <button
-                    onClick={() => {
-                      if (confirm(`Remove mentor ${m.name}?`)) {
-                        deleteMentor(m.id);
-                      }
-                    }}
-                    className="p-1 text-slate-400 hover:text-red-600 rounded"
+
+
+
+              Pending ({pendingBookings})
+
+
+
+            </button>
+
+
+
+
+
+
+
+            <button
+
+
+
+              onClick={() => setBookingFilter('confirmed')}
+
+
+
+              className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${
+
+
+
+                bookingFilter === 'confirmed'
+
+
+
+                  ? 'bg-[#EEF2FF] text-[#4F46E5] border border-indigo-200 font-black'
+
+
+
+                  : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-50'
+
+
+
+              }`}
+
+
+
+            >
+
+
+
+              Confirmed ({confirmedBookings})
+
+
+
+            </button>
+
+
+
+
+
+
+
+            <button
+
+
+
+              onClick={() => setBookingFilter('unassigned')}
+
+
+
+              className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${
+
+
+
+                bookingFilter === 'unassigned'
+
+
+
+                  ? 'bg-[#EEF2FF] text-[#4F46E5] border border-indigo-200 font-black'
+
+
+
+                  : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-50'
+
+
+
+              }`}
+
+
+
+            >
+
+
+
+              Unassigned ({unassignedBookings})
+
+
+
+            </button>
+
+
+
+          </div>
+
+
+
+
+
+
+
+          {/* Bookings List */}
+
+
+
+          {filteredBookings.length === 0 ? (
+
+
+
+            <div className="text-center py-12 bg-white rounded-3xl border border-slate-200 p-6">
+
+
+
+              <span className="text-3xl block mb-2">📫</span>
+
+
+
+              <h4 className="font-bold text-slate-800 text-sm">No bookings in this filter</h4>
+
+
+
+              <p className="text-sm text-slate-500 mt-1">
+
+
+
+                Student bookings for senior mentorship will appear here in real-time.
+
+
+
+              </p>
+
+
+
+            </div>
+
+
+
+          ) : (
+
+
+
+            <div className="space-y-5">
+
+
+
+              {filteredBookings.map((booking) => {
+
+
+
+                const assignedMentorObj = mentors.find(m => 
+
+
+
+                  m.name === (selectedMentorsMap[booking.bookingId] || booking.mentorName)
+
+
+
+                );
+
+
+
+
+
+
+
+                const currentMentorName = selectedMentorsMap[booking.bookingId] !== undefined
+
+
+
+                  ? selectedMentorsMap[booking.bookingId]
+
+
+
+                  : (booking.mentorName || (mentors[0]?.name || 'Ullas'));
+
+
+
+
+
+
+
+                const currentAdminNote = adminNotesMap[booking.bookingId] !== undefined
+
+
+
+                  ? adminNotesMap[booking.bookingId]
+
+
+
+                  : (booking.adminMessage || 'Your senior mentoring call is confirmed.');
+
+
+
+
+
+
+
+                return (
+
+
+
+                  <div 
+
+
+
+                    key={booking.bookingId}
+
+
+
+                    className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5 sm:p-6 space-y-4"
+
+
+
                   >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+
+
+
+                    {/* Header: Student Name & Status Badge */}
+
+
+
+                    <div className="flex items-start justify-between gap-3">
+
+
+
+                      <div>
+
+
+
+                        <h3 className="text-base font-black text-slate-900 leading-tight">
+
+
+
+                          {booking.userName}
+
+
+
+                        </h3>
+
+
+
+                        <p className="text-sm text-slate-500 font-medium mt-0.5">
+
+
+
+                          {booking.userEmail}
+
+
+
+                        </p>
+
+
+
+                      </div>
+
+
+
+
+
+
+
+                      {/* Status Badge */}
+
+
+
+                      <span className={`px-3 py-1 rounded-xl text-sm font-black capitalize ${
+
+
+
+                        booking.status === 'Confirmed'
+
+
+
+                          ? 'bg-[#DCFCE7] text-[#15803D]'
+
+
+
+                          : booking.status === 'Declined'
+
+
+
+                          ? 'bg-[#FEE2E2] text-[#B91C1C]'
+
+
+
+                          : 'bg-[#FEF3C7] text-[#B45309]'
+
+
+
+                      }`}>
+
+
+
+                        {booking.status}
+
+
+
+                      </span>
+
+
+
+                    </div>
+
+
+
+
+
+
+
+                    {/* Requested Info Row */}
+
+
+
+                    <div className="grid grid-cols-3 gap-2 text-sm pt-1">
+
+
+
+                      <div>
+
+
+
+                        <span className="block text-[10px] uppercase font-bold text-slate-500">Requested Date</span>
+
+
+
+                        <span className="font-black text-slate-900 text-sm sm:text-sm">
+
+
+
+                          {booking.selectedDate}
+
+
+
+                        </span>
+
+
+
+                      </div>
+
+
+
+                      <div>
+
+
+
+                        <span className="block text-[10px] uppercase font-bold text-slate-500">Requested Time</span>
+
+
+
+                        <span className="font-black text-slate-900 text-sm sm:text-sm">
+
+
+
+                          {booking.selectedTime}
+
+
+
+                        </span>
+
+
+
+                      </div>
+
+
+
+                      <div>
+
+
+
+                        <span className="block text-[10px] uppercase font-bold text-slate-500">Amount Paid</span>
+
+
+
+                        <span className="font-black text-[#16A34A] text-sm sm:text-sm">
+
+
+
+                          ₹{booking.amountPaid}
+
+
+
+                        </span>
+
+
+
+                      </div>
+
+
+
+                    </div>
+
+
+
+
+
+
+
+                    {/* Payment Banner (Light Yellow Container) */}
+
+
+
+                    <div className="p-3 bg-[#FEF9C3] rounded-2xl border border-[#FDE047] text-sm font-bold text-[#854D0E] flex items-center gap-2">
+
+
+
+                      <span>💳</span>
+
+
+
+                      <span>Payment UTR / Txn Ref: <strong className="font-mono text-[#713F12]">{booking.paymentRefNumber || 'UPI/610294829103/KART'}</strong></span>
+
+
+
+                    </div>
+
+
+
+
+
+
+
+                    {/* Assigned Mentor Card (Light Green Container) */}
+
+
+
+                    <div className="p-3.5 bg-[#F0FDF4] rounded-2xl border border-[#BBF7D0] space-y-2">
+
+
+
+                      <div className="flex items-center justify-between">
+
+
+
+                        <div className="flex items-center gap-2">
+
+
+
+                          <span className="text-base">🎓</span>
+
+
+
+                          <span className="text-sm font-black text-emerald-950">
+
+
+
+                            Assigned Mentor: {currentMentorName}
+
+
+
+                          </span>
+
+
+
+                        </div>
+
+
+
+                        <span className="px-2 py-0.5 rounded-md bg-[#16A34A] text-white text-[10px] font-black tracking-wider">
+
+
+
+                          VERIFIED
+
+
+
+                        </span>
+
+
+
+                      </div>
+
+
+
+
+
+
+
+                      {assignedMentorObj && (
+
+
+
+                        <div className="flex items-center justify-between text-sm text-emerald-900/80 font-semibold pt-1 border-t border-emerald-200/60">
+
+
+
+                          <div className="flex items-center gap-2">
+
+
+
+                            <span>🎓 {assignedMentorObj.branch}</span>
+
+
+
+                            <span>•</span>
+
+
+
+                            <span>🔬 {assignedMentorObj.college}</span>
+
+
+
+                          </div>
+
+
+
+                          <button
+
+
+
+                            onClick={() => setDetailMentor(assignedMentorObj)}
+
+
+
+                            className="text-[11px] font-bold text-teal-800 hover:underline flex items-center gap-0.5"
+
+
+
+                          >
+
+
+
+                            <span>Details</span>
+
+
+
+                            <Info className="w-3.5 h-3.5" />
+
+
+
+                          </button>
+
+
+
+                        </div>
+
+
+
+                      )}
+
+
+
+
+
+
+
+                      {assignedMentorObj?.email && (
+
+
+
+                        <div className="text-[11px] text-emerald-800 font-medium">
+
+
+
+                          📞 {assignedMentorObj.email}
+
+
+
+                        </div>
+
+
+
+                      )}
+
+
+
+                    </div>
+
+
+
+
+
+
+
+                    {/* Assign Senior Mentor Dropdown */}
+
+
+
+                    <div className="relative">
+
+
+
+                      <label className="absolute -top-2.5 left-3 bg-white px-1.5 text-[11px] font-semibold text-slate-600 z-10">
+
+
+
+                        Assign Senior Mentor
+
+
+
+                      </label>
+
+
+
+                      <div className="relative">
+
+
+
+                        <select
+
+
+
+                          value={currentMentorName}
+
+
+
+                          onChange={(e) => {
+
+
+
+                            const val = e.target.value;
+
+
+
+                            setSelectedMentorsMap(prev => ({ ...prev, [booking.bookingId]: val }));
+
+
+
+                          }}
+
+
+
+                          className="w-full h-14 pl-4 pr-10 bg-white border border-slate-400 rounded-2xl text-sm font-bold text-slate-900 appearance-none focus:outline-none focus:ring-2 focus:ring-[#4F46E5]"
+
+
+
+                        >
+
+
+
+                          {mentors.map(m => (
+
+
+
+                            <option key={m.id} value={m.name}>
+
+
+
+                              {m.name} ({m.college} • {m.branch})
+
+
+
+                            </option>
+
+
+
+                          ))}
+
+
+
+                        </select>
+
+
+
+                        <ChevronDown className="w-4 h-4 text-slate-500 absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+
+
+
+                      </div>
+
+
+
+                    </div>
+
+
+
+
+
+
+
+                    {/* Admin Message / Verification Note (Outlined Box) */}
+
+
+
+                    <div className="relative">
+
+
+
+                      <label className="absolute -top-2.5 left-3 bg-white px-1.5 text-[11px] font-semibold text-[#4F46E5] z-10">
+
+
+
+                        Admin Message / Verification Note
+
+
+
+                      </label>
+
+
+
+                      <textarea
+
+
+
+                        rows={2}
+
+
+
+                        value={currentAdminNote}
+
+
+
+                        onChange={(e) => {
+
+
+
+                          const val = e.target.value;
+
+
+
+                          setAdminNotesMap(prev => ({ ...prev, [booking.bookingId]: val }));
+
+
+
+                        }}
+
+
+
+                        className="w-full p-4 bg-white border-2 border-[#4F46E5] rounded-2xl text-sm font-semibold text-slate-900 focus:outline-none"
+
+
+
+                      />
+
+
+
+                    </div>
+
+
+
+
+
+
+
+                    {/* Action Buttons Grid */}
+
+
+
+                    <div className="space-y-2.5 pt-1">
+
+
+
+                      {/* Row 1: Verify Payment & Assign (Blue) | Confirm Slot (Green) */}
+
+
+
+                      <div className="grid grid-cols-2 gap-3">
+
+
+
+                        <button
+
+
+
+                          onClick={() => handleVerifyPaymentAndAssign(booking)}
+
+
+
+                          className="h-12 rounded-2xl bg-[#0284C7] hover:bg-[#0369A1] text-white text-sm font-black shadow-sm flex items-center justify-center gap-1.5 transition-all active:scale-98"
+
+
+
+                        >
+
+
+
+                          <span>💳 Verify Payment & Assign</span>
+
+
+
+                        </button>
+
+
+
+
+
+
+
+                        <button
+
+
+
+                          onClick={() => handleConfirmSlot(booking)}
+
+
+
+                          className="h-12 rounded-2xl bg-[#16A34A] hover:bg-[#15803D] text-white text-sm font-black shadow-sm flex items-center justify-center gap-1.5 transition-all active:scale-98"
+
+
+
+                        >
+
+
+
+                          <span>✅ Confirm Slot</span>
+
+
+
+                        </button>
+
+
+
+                      </div>
+
+
+
+
+
+
+
+                      {/* Row 2: Suggest Other Time (Orange) | Decline (White with red outline) */}
+
+
+
+                      <div className="grid grid-cols-2 gap-3">
+
+
+
+                        <button
+
+
+
+                          onClick={() => handleSuggestOtherTime(booking)}
+
+
+
+                          className="h-12 rounded-2xl bg-[#EA580C] hover:bg-[#C2410C] text-white text-sm font-black shadow-sm flex items-center justify-center gap-1.5 transition-all active:scale-98"
+
+
+
+                        >
+
+
+
+                          <span>💬 Suggest Other Time</span>
+
+
+
+                        </button>
+
+
+
+
+
+
+
+                        <button
+
+
+
+                          onClick={() => handleDecline(booking)}
+
+
+
+                          className="h-12 rounded-2xl bg-white hover:bg-rose-50 border-2 border-slate-300 text-[#DC2626] text-sm font-black shadow-sm flex items-center justify-center gap-1.5 transition-all active:scale-98"
+
+
+
+                        >
+
+
+
+                          <span>✕ Decline</span>
+
+
+
+                        </button>
+
+
+
+                      </div>
+
+
+
+
+
+
+
+                      {/* Row 3: End 1-on-1 Chat Session (Purple Full Width) */}
+
+
+
+                      <button
+
+
+
+                        onClick={() => handleEndChatSession(booking)}
+
+
+
+                        className="w-full h-12 rounded-2xl bg-[#6B21A8] hover:bg-[#581C87] text-white text-sm font-black shadow-sm flex items-center justify-center gap-2 transition-all active:scale-98"
+
+
+
+                      >
+
+
+
+                        <span>🛑</span>
+
+
+
+                        <span>End 1-on-1 Chat Session</span>
+
+
+
+                      </button>
+
+
+
+
+
+
+
+                      {/* Row 4: Delete Request (White Full Width with Trash) */}
+
+
+
+                      <button
+
+
+
+                        onClick={async () => {
+
+
+
+                          if (confirm(`Delete booking request from ${booking.userName}?`)) {
+
+
+
+                            await deleteBooking(booking.bookingId);
+
+
+
+                          }
+
+
+
+                        }}
+
+
+
+                        className="w-full h-12 rounded-2xl bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 text-sm font-bold shadow-sm flex items-center justify-center gap-1.5 transition-all active:scale-98"
+
+
+
+                      >
+
+
+
+                        <span>🗑️</span>
+
+
+
+                        <span>Delete Request</span>
+
+
+
+                      </button>
+
+
+
+                    </div>
+
+
+
+                  </div>
+
+
+
+                );
+
+
+
+              })}
+
+
+
+            </div>
+
+
+
+          )}
+
+
+
+        </div>
+
+
+
+      )}
+
+
+
+
+
+
+
+      {/* ============================================================ */}
+
+
+
+      {/* TAB 2: Registered Mentors Catalog View                       */}
+
+
+
+      {/* ============================================================ */}
+
+
+
+      {activeMainTab === 'mentors' && (
+
+
+
+        <div className="space-y-4">
+
+
+
+          <div className="flex items-center justify-between px-1">
+
+
+
+            <h3 className="text-sm font-black text-slate-900">
+
+
+
+              Verified Senior Mentors ({mentors.length})
+
+
+
+            </h3>
+
+
+
+
+
+
+
+            <button
+
+
+
+              onClick={handleOpenAddMentor}
+
+
+
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#4F46E5] hover:bg-[#4338CA] text-white font-bold text-sm shadow transition-all active:scale-95"
+
+
+
+            >
+
+
+
+              <Plus className="w-4 h-4" />
+
+
+
+              <span>+ Add Senior Mentor</span>
+
+
+
+            </button>
+
+
+
+          </div>
+
+
+
+
+
+
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+
+
+            {mentors.map((mentor) => (
+
+
+
+              <div 
+
+
+
+                key={mentor.id}
+
+
+
+                className="bg-white rounded-3xl border border-slate-200 p-5 shadow-sm space-y-3 flex flex-col justify-between"
+
+
+
+              >
+
+
+
+                <div className="space-y-3">
+
+
+
+                  <div className="flex items-center gap-3">
+
+
+
+                    <img 
+
+
+
+                      src={mentor.photoUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=800&q=80'} 
+
+
+
+                      alt={mentor.name}
+
+
+
+                      className="w-14 h-14 rounded-2xl object-cover border border-slate-200 shadow-sm shrink-0" 
+
+
+
+                    />
+
+
+
+                    <div>
+
+
+
+                      <h4 className="font-extrabold text-sm text-slate-900">{mentor.name}</h4>
+
+
+
+                      <p className="text-sm text-indigo-600 font-bold">{mentor.kcetRank}</p>
+
+
+
+                      <p className="text-[11px] text-slate-500 font-medium">{mentor.currentYear}</p>
+
+
+
+                    </div>
+
+
+
+                  </div>
+
+
+
+
+
+
+
+                  <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-100 text-sm space-y-1">
+
+
+
+                    <div className="font-bold text-slate-800">🎓 {mentor.college}</div>
+
+
+
+                    <div className="text-slate-600">📚 {mentor.branch}</div>
+
+
+
+                  </div>
+
+
+
+
+
+
+
+                  <p className="text-sm text-slate-600 line-clamp-2">
+
+
+
+                    {mentor.bio}
+
+
+
+                  </p>
+
+
+
                 </div>
 
-                <p className="text-xs text-slate-600 mt-1">{m.branch}</p>
-                <p className="text-xs text-slate-500 font-medium">{m.college} ({m.currentYear})</p>
 
-                <p className="text-xs text-slate-500 mt-2 line-clamp-2 leading-relaxed">
-                  {m.bio}
-                </p>
 
-                <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-                  <div className="flex items-center gap-1 text-amber-600 font-bold">
-                    <Star className="w-3.5 h-3.5 fill-current" />
-                    <span>{m.rating} Rating</span>
+
+
+
+
+                <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-sm">
+
+
+
+                  <div className="flex items-center gap-1 text-amber-500 font-black">
+
+
+
+                    <Star className="w-3.5 h-3.5 fill-amber-400" />
+
+
+
+                    <span>{mentor.rating}</span>
+
+
+
                   </div>
+
+
+
+
+
+
+
                   <div className="flex items-center gap-2">
-                    {m.email && <span className="text-[11px] text-slate-400">{m.email}</span>}
-                    {m.instagram && <span className="text-[11px] text-pink-600 font-semibold">{m.instagram}</span>}
+
+
+
+                    <button
+
+
+
+                      onClick={() => {
+
+
+
+                        setEditingMentorId(mentor.id);
+
+
+
+                        setMentorFormData({ ...mentor });
+
+
+
+                        setIsMentorModalOpen(true);
+
+
+
+                      }}
+
+
+
+                      className="px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 font-bold text-[11px]"
+
+
+
+                    >
+
+
+
+                      Edit
+
+
+
+                    </button>
+
+
+
+                    <button
+
+
+
+                      onClick={async () => {
+
+
+
+                        if (confirm(`Delete mentor ${mentor.name}?`)) {
+
+
+
+                          await deleteMentor(mentor.id);
+
+
+
+                        }
+
+
+
+                      }}
+
+
+
+                      className="p-1 text-rose-500 hover:bg-rose-50 rounded-lg"
+
+
+
+                    >
+
+
+
+                      <Trash2 className="w-3.5 h-3.5" />
+
+
+
+                    </button>
+
+
+
                   </div>
+
+
+
                 </div>
+
+
+
               </div>
-            </div>
-          ))}
-        </div>
-      )}
 
-      {/* Booking Action Modal */}
-      {activeBooking && actionType && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-card max-w-md w-full p-6 shadow-2xl animate-fadeIn">
-            <h3 className="font-bold text-base text-admin-heading mb-1 capitalize">
-              {actionType === 'confirm' ? 'Confirm Mentoring Slot' :
-               actionType === 'reschedule' ? 'Request Reschedule' :
-               actionType === 'reject' ? 'Decline Booking' : 'Send Direct Message to Student'}
-            </h3>
-            <p className="text-xs text-admin-muted mb-4">
-              Student: <strong>{activeBooking.userName}</strong> ({activeBooking.userEmail})
-            </p>
 
-            <div className="mb-4">
-              <label className="block text-xs font-semibold text-admin-heading mb-1.5">
-                {actionType === 'reject' ? 'Rejection Reason (Required)' : 'Message / Instructions for Student'}
-              </label>
-              <textarea
-                rows={3}
-                value={actionInput}
-                onChange={(e) => setActionInput(e.target.value)}
-                placeholder="Type details here..."
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white"
-                required
-              />
-            </div>
 
-            <div className="flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => { setActiveBooking(null); setActionType(null); }}
-                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleExecuteBookingAction}
-                className={`px-5 py-2 text-xs font-bold text-white rounded-xl shadow ${
-                  actionType === 'reject' ? 'bg-red-600 hover:bg-red-700' :
-                  actionType === 'confirm' ? 'bg-emerald-600 hover:bg-emerald-700' :
-                  'bg-admin-primary hover:bg-indigo-700'
-                }`}
-              >
-                Execute Action
-              </button>
-            </div>
+            ))}
+
+
+
           </div>
+
+
+
         </div>
+
+
+
       )}
 
-      {/* Add Mentor Modal */}
+
+
+
+
+
+
+      {/* Mentor Details Modal */}
+
+
+
+      {detailMentor && (
+
+
+
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn">
+
+
+
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+
+
+
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+
+
+
+              <h3 className="font-black text-base text-slate-900">Mentor Credentials</h3>
+
+
+
+              <button
+
+
+
+                onClick={() => setDetailMentor(null)}
+
+
+
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center font-bold text-sm"
+
+
+
+              >
+
+
+
+                ✕
+
+
+
+              </button>
+
+
+
+            </div>
+
+
+
+
+
+
+
+            <div className="flex items-center gap-3">
+
+
+
+              <img src={detailMentor.photoUrl} alt={detailMentor.name} className="w-16 h-16 rounded-2xl object-cover border" />
+
+
+
+              <div>
+
+
+
+                <h4 className="font-extrabold text-base text-slate-900">{detailMentor.name}</h4>
+
+
+
+                <p className="text-sm text-indigo-600 font-bold">{detailMentor.kcetRank}</p>
+
+
+
+                <p className="text-sm text-slate-500">{detailMentor.college}</p>
+
+
+
+              </div>
+
+
+
+            </div>
+
+
+
+
+
+
+
+            <div className="space-y-2 text-sm text-slate-700 bg-slate-50 p-4 rounded-2xl">
+
+
+
+              <div><strong>Branch:</strong> {detailMentor.branch}</div>
+
+
+
+              <div><strong>Year:</strong> {detailMentor.currentYear}</div>
+
+
+
+              <div><strong>Email:</strong> {detailMentor.email || 'N/A'}</div>
+
+
+
+              <div><strong>Rating:</strong> ⭐ {detailMentor.rating} / 5.0</div>
+
+
+
+              <div><strong>Bio:</strong> {detailMentor.bio}</div>
+
+
+
+            </div>
+
+
+
+
+
+
+
+            <div className="pt-2 flex justify-end">
+
+
+
+              <button
+
+
+
+                onClick={() => setDetailMentor(null)}
+
+
+
+                className="px-4 py-2 rounded-xl bg-slate-900 text-white text-sm font-bold"
+
+
+
+              >
+
+
+
+                Close
+
+
+
+              </button>
+
+
+
+            </div>
+
+
+
+          </div>
+
+
+
+        </div>
+
+
+
+      )}
+
+
+
+
+
+
+
+      {/* Add / Edit Mentor Modal */}
+
+
+
       {isMentorModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-card max-w-lg w-full p-6 shadow-2xl animate-fadeIn max-h-[90vh] overflow-y-auto">
-            <h3 className="font-bold text-base text-admin-heading mb-4 pb-2 border-b border-slate-100">
-              Onboard Senior Engineering Mentor
-            </h3>
-            <form onSubmit={handleSaveMentor} className="space-y-3">
+
+
+
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn">
+
+
+
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[90vh] overflow-y-auto">
+
+
+
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+
+
+
+              <h3 className="font-black text-base text-slate-900">
+
+
+
+                {editingMentorId ? 'Edit Senior Mentor' : 'Add Senior Mentor'}
+
+
+
+              </h3>
+
+
+
+              <button
+
+
+
+                onClick={() => setIsMentorModalOpen(false)}
+
+
+
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center font-bold text-sm"
+
+
+
+              >
+
+
+
+                ✕
+
+
+
+              </button>
+
+
+
+            </div>
+
+
+
+
+
+
+
+            <form onSubmit={handleSaveMentorForm} className="space-y-3 text-sm">
+
+
+
               <div>
-                <label className="block text-xs font-semibold text-admin-heading mb-1">Mentor Full Name</label>
+
+
+
+                <label className="block font-bold text-slate-700 mb-1">Mentor Name</label>
+
+
+
                 <input
+
+
+
                   type="text"
-                  value={mentorForm.name}
-                  onChange={(e) => setMentorForm({ ...mentorForm, name: e.target.value })}
+
+
+
+                  value={mentorFormData.name}
+
+
+
+                  onChange={(e) => setMentorFormData({ ...mentorFormData, name: e.target.value })}
+
+
+
                   placeholder="e.g. Rohan Deshmukh"
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs"
+
+
+
+                  className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold"
+
+
+
                   required
+
+
+
                 />
+
+
+
               </div>
+
+
+
+
+
+
 
               <div className="grid grid-cols-2 gap-3">
+
+
+
                 <div>
-                  <label className="block text-xs font-semibold text-admin-heading mb-1">Engineering Branch</label>
+
+
+
+                  <label className="block font-bold text-slate-700 mb-1">College</label>
+
+
+
                   <input
+
+
+
                     type="text"
-                    value={mentorForm.branch}
-                    onChange={(e) => setMentorForm({ ...mentorForm, branch: e.target.value })}
-                    placeholder="e.g. Computer Science"
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs"
+
+
+
+                    value={mentorFormData.college}
+
+
+
+                    onChange={(e) => setMentorFormData({ ...mentorFormData, college: e.target.value })}
+
+
+
+                    className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl font-medium"
+
+
+
                     required
+
+
+
                   />
+
+
+
                 </div>
+
+
+
                 <div>
-                  <label className="block text-xs font-semibold text-admin-heading mb-1">College Name</label>
+
+
+
+                  <label className="block font-bold text-slate-700 mb-1">Branch</label>
+
+
+
                   <input
+
+
+
                     type="text"
-                    value={mentorForm.college}
-                    onChange={(e) => setMentorForm({ ...mentorForm, college: e.target.value })}
-                    placeholder="e.g. RVCE Bengaluru"
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs"
+
+
+
+                    value={mentorFormData.branch}
+
+
+
+                    onChange={(e) => setMentorFormData({ ...mentorFormData, branch: e.target.value })}
+
+
+
+                    className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl font-medium"
+
+
+
                     required
+
+
+
                   />
+
+
+
                 </div>
+
+
+
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-admin-heading mb-1">Current Year</label>
-                  <input
-                    type="text"
-                    value={mentorForm.currentYear}
-                    onChange={(e) => setMentorForm({ ...mentorForm, currentYear: e.target.value })}
-                    placeholder="e.g. 3rd Year"
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-admin-heading mb-1">KCET Rank</label>
-                  <input
-                    type="text"
-                    value={mentorForm.kcetRank}
-                    onChange={(e) => setMentorForm({ ...mentorForm, kcetRank: e.target.value })}
-                    placeholder="Rank #142"
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-admin-heading mb-1">Rating</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    max="5.0"
-                    value={mentorForm.rating}
-                    onChange={(e) => setMentorForm({ ...mentorForm, rating: Number(e.target.value) })}
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs"
-                  />
-                </div>
-              </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-admin-heading mb-1">Experience & Bio</label>
-                <textarea
-                  rows={2}
-                  value={mentorForm.bio}
-                  onChange={(e) => setMentorForm({ ...mentorForm, bio: e.target.value })}
-                  placeholder="Tell students how you cracked KCET and what counseling tips you offer..."
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs"
-                />
-              </div>
+
+
+
+
 
               <div className="grid grid-cols-2 gap-3">
+
+
+
                 <div>
-                  <label className="block text-xs font-semibold text-admin-heading mb-1">Contact Email</label>
+
+
+
+                  <label className="block font-bold text-slate-700 mb-1">KCET Rank</label>
+
+
+
                   <input
-                    type="email"
-                    value={mentorForm.email}
-                    onChange={(e) => setMentorForm({ ...mentorForm, email: e.target.value })}
-                    placeholder="mentor@college.edu"
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-admin-heading mb-1">Instagram Handle</label>
-                  <input
+
+
+
                     type="text"
-                    value={mentorForm.instagram}
-                    onChange={(e) => setMentorForm({ ...mentorForm, instagram: e.target.value })}
-                    placeholder="@username"
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs"
+
+
+
+                    value={mentorFormData.kcetRank}
+
+
+
+                    onChange={(e) => setMentorFormData({ ...mentorFormData, kcetRank: e.target.value })}
+
+
+
+                    placeholder="e.g. Rank #450"
+
+
+
+                    className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl font-medium"
+
+
+
                   />
+
+
+
                 </div>
+
+
+
+                <div>
+
+
+
+                  <label className="block font-bold text-slate-700 mb-1">Current Year</label>
+
+
+
+                  <input
+
+
+
+                    type="text"
+
+
+
+                    value={mentorFormData.currentYear}
+
+
+
+                    onChange={(e) => setMentorFormData({ ...mentorFormData, currentYear: e.target.value })}
+
+
+
+                    placeholder="e.g. 3rd Year B.E."
+
+
+
+                    className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl font-medium"
+
+
+
+                  />
+
+
+
+                </div>
+
+
+
               </div>
 
+
+
+
+
+
+
               <div>
-                <label className="block text-xs font-semibold text-admin-heading mb-1">Photo URL</label>
+
+
+
+                <label className="block font-bold text-slate-700 mb-1">Email</label>
+
+
+
                 <input
-                  type="text"
-                  value={mentorForm.photoUrl}
-                  onChange={(e) => setMentorForm({ ...mentorForm, photoUrl: e.target.value })}
-                  placeholder="https://images.unsplash.com/..."
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs"
+
+
+
+                  type="email"
+
+
+
+                  value={mentorFormData.email}
+
+
+
+                  onChange={(e) => setMentorFormData({ ...mentorFormData, email: e.target.value })}
+
+
+
+                  placeholder="mentor@gmail.com"
+
+
+
+                  className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl font-medium"
+
+
+
                 />
+
+
+
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setIsMentorModalOpen(false)}
-                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 text-xs font-bold text-white bg-admin-royal hover:bg-blue-700 rounded-xl shadow"
-                >
-                  Save Mentor
-                </button>
+
+
+
+
+
+
+              <div>
+
+
+
+                <label className="block font-bold text-slate-700 mb-1">Mentor Bio / Highlights</label>
+
+
+
+                <textarea
+
+
+
+                  rows={2}
+
+
+
+                  value={mentorFormData.bio}
+
+
+
+                  onChange={(e) => setMentorFormData({ ...mentorFormData, bio: e.target.value })}
+
+
+
+                  className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl font-medium"
+
+
+
+                />
+
+
+
               </div>
+
+
+
+
+
+
+
+              <div className="pt-2 flex justify-end gap-2 border-t border-slate-100">
+
+
+
+                <button
+
+
+
+                  type="button"
+
+
+
+                  onClick={() => setIsMentorModalOpen(false)}
+
+
+
+                  className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-bold"
+
+
+
+                >
+
+
+
+                  Cancel
+
+
+
+                </button>
+
+
+
+                <button
+
+
+
+                  type="submit"
+
+
+
+                  className="px-5 py-2 rounded-xl bg-[#4F46E5] text-white font-bold shadow"
+
+
+
+                >
+
+
+
+                  Save Mentor
+
+
+
+                </button>
+
+
+
+              </div>
+
+
+
             </form>
+
+
+
           </div>
+
+
+
         </div>
+
+
+
       )}
+
+
+
     </div>
+
+
+
   );
+
+
+
 };
+
+
+

@@ -10,11 +10,15 @@ import {
   Upload, 
   DollarSign, 
   Award, 
-  Home, 
-  Layers,
+  CheckCircle2, 
+  Bell, 
+  ChevronDown, 
+  BarChart2, 
+  X,
+  FileText,
+  Image as ImageIcon,
   Sparkles,
-  CheckCircle2,
-  Table
+  RefreshCw
 } from 'lucide-react';
 import { useAdminData } from '../../context/AdminDataContext';
 import { 
@@ -22,691 +26,1015 @@ import {
   BranchCutoff, 
   KARNATAKA_DISTRICTS, 
   CUTOFF_CATEGORIES, 
-  STANDARD_BRANCHES, 
+  RANK_RANGES, 
+  CATEGORY_MULTIPLIERS, 
+  DEMANDED_BRANCHES, 
   CollegeType, 
   NaacGrade 
 } from '../../types';
-
 export const CollegesTab: React.FC = () => {
-  const { colleges, cutoffs, saveCollege, deleteCollege, saveCutoff } = useAdminData();
-
-  const [selectedDistrict, setSelectedDistrict] = useState<string>('ALL');
-  const [selectedType, setSelectedType] = useState<string>('ALL');
-  const [searchQuery, setSearchQuery] = useState('');
-
+  const { 
+    colleges, 
+    cutoffs, 
+    saveCollege, 
+    deleteCollege, 
+    saveCutoff, 
+    deleteCutoff, 
+    sendBroadcast,
+    notifySuccess,
+    notifyError,
+    notifyWarning,
+    notifyInfo,
+    requestConfirm
+  } = useAdminData();
   // Form State
-  const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-
-  const [formData, setFormData] = useState<College>({
-    id: `col-${Date.now()}`,
-    name: '',
-    code: 'E',
-    district: 'Bengaluru Urban',
-    collegeType: 'Autonomous',
-    imageResUrl: 'https://images.unsplash.com/photo-1562774053-701939374585?auto=format&fit=crop&w=800&q=80',
-    naacGrade: 'A++',
-    nirfRank: 100,
-    tuitionFeePerYear: 104000,
-    hostelFeePerYear: 120000,
-    highestPackageLpa: 45.0,
-    avgPackageLpa: 11.5,
-    placementPercentage: 92,
-    topRecruiters: ['Microsoft', 'Amazon', 'Bosch', 'Infosys'],
-    studentRating: 4.8,
-    hasHostel: true,
-    websiteUrl: 'https://',
-    mapLocationQuery: '',
-    distanceKmFromBlr: 10
+  // Cutoff Matching Matrix Top Box
+  const [rankRange, setRankRange] = useState<string>('1 – 1,000');
+  const [category, setCategory] = useState<string>('GM');
+  const [closingRank, setClosingRank] = useState<number>(1200);
+  // College Form Fields
+  const [collegeName, setCollegeName] = useState<string>('RV College of Engineering');
+  const [cetCode, setCetCode] = useState<string>('E001');
+  const [district, setDistrict] = useState<string>('Bengaluru Urban');
+  const [collegeType, setCollegeType] = useState<CollegeType>('Autonomous');
+  const [tuitionFee, setTuitionFee] = useState<number>(118000);
+  const [hasHostel, setHasHostel] = useState<boolean>(true);
+  const [hostelFee, setHostelFee] = useState<number>(85000);
+  const [naacGrade, setNaacGrade] = useState<NaacGrade>('A++');
+  const [nirfRank, setNirfRank] = useState<number>(45);
+  const [avgPackage, setAvgPackage] = useState<number>(14.5);
+  const [highestPackage, setHighestPackage] = useState<number>(58.0);
+  const [bannerUrl, setBannerUrl] = useState<string>('https://images.unsplash.com/photo-1562774053-701939374585?auto=format&fit=crop&w=800&q=80');
+  const [websiteUrl, setWebsiteUrl] = useState<string>('https://rvce.edu.in');
+  const [mapLocation, setMapLocation] = useState<string>('RV College of Engineering Bengaluru');
+  const [notifyStudents, setNotifyStudents] = useState<boolean>(true);
+  const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [statusMessage, setStatusMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  // Filter & Search for list
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterDistrict, setFilterDistrict] = useState('ALL');
+  // Cutoff Matrix Modal for a specific college (Exact Screenshot Layout & Real-Time Sync)
+  const [cutoffModalCollege, setCutoffModalCollege] = useState<College | null>(null);
+  const [modalBranchCode, setModalBranchCode] = useState('CSE');
+  const [modalBranchName, setModalBranchName] = useState('Computer Science & Engineering');
+  const [modalCategoryRanks, setModalCategoryRanks] = useState<Record<string, number | string>>({
+    GM: 120,
+    '2A': 210,
+    '2B': 2300,
+    '3A': 1400,
+    '3B': 1500,
+    SC: 12000,
+    ST: 18000
   });
 
-  // Cutoffs Manager Modal
-  const [managingCutoffsCollege, setManagingCutoffsCollege] = useState<College | null>(null);
-  const [selectedBranchCode, setSelectedBranchCode] = useState('CSE');
-  const [currentCutoffMap, setCurrentCutoffMap] = useState<Record<string, number>>({
-    GM: 1500,
-    '2A': 3500,
-    '2B': 3800,
-    '3A': 2200,
-    '3B': 2500,
-    SC: 11000,
-    ST: 14000
-  });
+  // When branch code changes in the input, auto-fill if an existing cutoff for this college and branch exists
+  const handleBranchCodeInputChange = (code: string) => {
+    const cleanCode = code.toUpperCase();
+    setModalBranchCode(cleanCode);
+    
+    // Auto populate branch name if known
+    const demanded = DEMANDED_BRANCHES.find(b => b.code === cleanCode);
+    if (demanded) {
+      setModalBranchName(demanded.name);
+    }
 
-  const collegeTypes: CollegeType[] = [
-    'Autonomous', 
-    'Government', 
-    'Private', 
-    'Deemed University', 
-    'Private University'
-  ];
+    if (cutoffModalCollege) {
+      const existing = cutoffs.find(c => 
+        c.collegeId === cutoffModalCollege.id && 
+        c.branchCode.toUpperCase() === cleanCode
+      );
+      if (existing && existing.categoryCutoffs) {
+        setModalBranchName(existing.branchName || demanded?.name || cleanCode);
+        setModalCategoryRanks({
+          GM: existing.categoryCutoffs.GM ?? '',
+          '2A': existing.categoryCutoffs['2A'] ?? '',
+          '2B': existing.categoryCutoffs['2B'] ?? '',
+          '3A': existing.categoryCutoffs['3A'] ?? '',
+          '3B': existing.categoryCutoffs['3B'] ?? '',
+          SC: existing.categoryCutoffs.SC ?? '',
+          ST: existing.categoryCutoffs.ST ?? ''
+        });
+      }
+    }
+  };
 
-  const naacGrades: NaacGrade[] = ['A++', 'A+', 'A', 'B++', 'B+', 'B', 'NA'];
+  const handleOpenCutoffModal = (col: College) => {
+    setCutoffModalCollege(col);
+    const existingList = cutoffs.filter(c => c && c.collegeId === col.id);
+    if (existingList.length > 0) {
+      const first = existingList[0];
+      setModalBranchCode(first.branchCode);
+      setModalBranchName(first.branchName || 'Computer Science & Engineering');
+      setModalCategoryRanks({
+        GM: first.categoryCutoffs?.GM ?? 120,
+        '2A': first.categoryCutoffs?.['2A'] ?? 210,
+        '2B': first.categoryCutoffs?.['2B'] ?? 2300,
+        '3A': first.categoryCutoffs?.['3A'] ?? 1400,
+        '3B': first.categoryCutoffs?.['3B'] ?? 1500,
+        SC: first.categoryCutoffs?.SC ?? 12000,
+        ST: first.categoryCutoffs?.ST ?? 18000
+      });
+    } else {
+      setModalBranchCode('CSE');
+      setModalBranchName('Computer Science & Engineering');
+      setModalCategoryRanks({
+        GM: 120,
+        '2A': 210,
+        '2B': 2300,
+        '3A': 1400,
+        '3B': 1500,
+        SC: 12000,
+        ST: 18000
+      });
+    }
+  };
 
-  const handleOpenAdd = () => {
-    setEditingId(null);
-    setFormData({
-      id: `col-${Date.now()}`,
-      name: '',
-      code: 'E',
-      district: 'Bengaluru Urban',
-      collegeType: 'Autonomous',
-      imageResUrl: 'https://images.unsplash.com/photo-1562774053-701939374585?auto=format&fit=crop&w=800&q=80',
-      naacGrade: 'A++',
-      nirfRank: 100,
-      tuitionFeePerYear: 104000,
-      hostelFeePerYear: 120000,
-      highestPackageLpa: 45.0,
-      avgPackageLpa: 11.5,
-      placementPercentage: 92,
-      topRecruiters: ['Microsoft', 'Amazon', 'Bosch'],
-      studentRating: 4.8,
-      hasHostel: true,
-      websiteUrl: 'https://',
-      mapLocationQuery: '',
-      distanceKmFromBlr: 10
+  const handleSelectExistingCutoffToEdit = (cut: BranchCutoff) => {
+    setModalBranchCode(cut.branchCode);
+    setModalBranchName(cut.branchName || cut.branchCode);
+    setModalCategoryRanks({
+      GM: cut.categoryCutoffs?.GM ?? '',
+      '2A': cut.categoryCutoffs?.['2A'] ?? '',
+      '2B': cut.categoryCutoffs?.['2B'] ?? '',
+      '3A': cut.categoryCutoffs?.['3A'] ?? '',
+      '3B': cut.categoryCutoffs?.['3B'] ?? '',
+      SC: cut.categoryCutoffs?.SC ?? '',
+      ST: cut.categoryCutoffs?.ST ?? ''
     });
-    setIsFormOpen(true);
   };
 
-  const handleEdit = (col: College) => {
-    setEditingId(col.id);
-    setFormData({ ...col });
-    setIsFormOpen(true);
+  const handleSaveModalCutoff = async () => {
+    if (!cutoffModalCollege) return;
+    if (!modalBranchCode.trim()) {
+      notifyWarning('Please enter a valid branch code (e.g. CSE).');
+      return;
+    }
+
+    const branchCodeClean = modalBranchCode.trim().toUpperCase();
+    const docId = `${cutoffModalCollege.id}_${branchCodeClean}`;
+    const newCutoff: BranchCutoff = {
+      id: docId,
+      collegeId: cutoffModalCollege.id,
+      branchCode: branchCodeClean,
+      branchName: modalBranchName.trim() || branchCodeClean,
+      categoryCutoffs: {
+        GM: Number(modalCategoryRanks.GM) || 1200,
+        '2A': Number(modalCategoryRanks['2A']) || 2100,
+        '2B': Number(modalCategoryRanks['2B']) || 2300,
+        '3A': Number(modalCategoryRanks['3A']) || 1400,
+        '3B': Number(modalCategoryRanks['3B']) || 1500,
+        SC: Number(modalCategoryRanks.SC) || 12000,
+        ST: Number(modalCategoryRanks.ST) || 18000
+      }
+    };
+
+    try {
+      await saveCutoff(newCutoff);
+      alert(`💾 Cutoff saved for ${branchCodeClean} in ${cutoffModalCollege.name}!
+Path: /branch_cutoffs/${docId}`);
+    } catch (err: any) {
+      notifyError(`Error saving cutoff: ${err.message || err}`);
+    }
   };
 
+  // Rank Range selection updates closing rank baseline
+  const handleRankRangeChange = (range: string) => {
+    setRankRange(range);
+    const map: Record<string, number> = {
+      '1 – 1,000': 680,
+      '1,000 – 2,500': 1500,
+      '2,500 – 5,000': 3500,
+      '5,000 – 10,000': 7500,
+      '10,000 – 15,000': 12500,
+      '15,000 – 25,000': 19000,
+      '25,000 – 50,000': 35000,
+      '50,000 – 75,000': 60000,
+      '75,000 – 100,000+': 85000
+    };
+    if (map[range]) {
+      setClosingRank(map[range]);
+    }
+  };
+  // Base64 Image Upload
   const handleGalleryUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
-        setFormData(prev => ({ ...prev, imageResUrl: reader.result as string }));
+        setBannerUrl(reader.result as string);
       };
       reader.readAsDataURL(file);
     }
   };
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  // Reset Form for New Entry
+  const handleResetForm = () => {
+    setEditingId(null);
+    setCollegeName('');
+    setCetCode('E');
+    setDistrict('Bengaluru Urban');
+    setCollegeType('Autonomous');
+    setTuitionFee(118000);
+    setHasHostel(true);
+    setHostelFee(85000);
+    setNaacGrade('A++');
+    setNirfRank(50);
+    setAvgPackage(12.5);
+    setHighestPackage(45.0);
+    setBannerUrl('https://images.unsplash.com/photo-1562774053-701939374585?auto=format&fit=crop&w=800&q=80');
+    setWebsiteUrl('https://');
+    setMapLocation('');
+    setClosingRank(1200);
+  };
+  // Populate Form for Editing
+  const handleEditDetails = (col: College) => {
+    setEditingId(col.id);
+    setCollegeName(col.name);
+    setCetCode(col.code);
+    setDistrict(col.district);
+    setCollegeType(col.collegeType);
+    setTuitionFee(col.tuitionFeePerYear || 118000);
+    setHasHostel(col.hasHostel);
+    setHostelFee(col.hostelFeePerYear || 85000);
+    setNaacGrade(col.naacGrade);
+    setNirfRank(col.nirfRank);
+    setAvgPackage(col.avgPackageLpa);
+    setHighestPackage(col.highestPackageLpa);
+    setBannerUrl(col.imageResUrl || '');
+    setWebsiteUrl(col.websiteUrl || '');
+    setMapLocation(col.mapLocationQuery || `${col.name} ${col.district}`);
+    // Fetch existing CSE cutoff if available
+    const cut = cutoffs.find(c => c.collegeId === col.id && c.branchCode === 'CSE');
+    if (cut && cut.categoryCutoffs?.GM) {
+      setClosingRank(cut.categoryCutoffs.GM);
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+  // Save to Firebase Pipeline
+  const handleSaveCollege = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name.trim() || !formData.code.trim()) {
-      alert('College name and CET code are required.');
+    if (!collegeName.trim() || !cetCode.trim()) {
+      setStatusMessage({ text: 'College name and CET code are required.', type: 'error' });
       return;
     }
-    await saveCollege(formData);
-    setIsFormOpen(false);
-  };
-
-  // Open Cutoff Editor
-  const handleOpenCutoffEditor = (col: College) => {
-    setManagingCutoffsCollege(col);
-    // Find existing cutoff for default CSE
-    const existing = cutoffs.find(c => c.collegeId === col.id && c.branchCode === 'CSE');
-    if (existing) {
-      setCurrentCutoffMap({ ...existing.categoryCutoffs });
-    } else {
-      setCurrentCutoffMap({
-        GM: 2500,
-        '2A': 5500,
-        '2B': 6000,
-        '3A': 3500,
-        '3B': 4000,
-        SC: 15000,
-        ST: 19000
+    setIsSaving(true);
+    setStatusMessage(null);
+    try {
+      const colId = editingId || `col_${cetCode.toLowerCase().trim()}_${Date.now()}`;
+      const formattedWebsite = websiteUrl.trim().startsWith('http') 
+        ? websiteUrl.trim() 
+        : (websiteUrl.trim() ? `https://${websiteUrl.trim()}` : '');
+      const collegePayload: College = {
+        id: colId,
+        name: collegeName.trim(),
+        code: cetCode.trim().toUpperCase(),
+        district,
+        collegeType,
+        imageResUrl: bannerUrl,
+        logoResUrl: '',
+        naacGrade,
+        nirfRank: Number(nirfRank) || 0,
+        tuitionFeePerYear: Number(tuitionFee) || 118000,
+        hostelFeePerYear: hasHostel ? (Number(hostelFee) || 85000) : 0,
+        hasHostel,
+        highestPackageLpa: Number(highestPackage) || 45.0,
+        avgPackageLpa: Number(avgPackage) || 12.0,
+        placementPercentage: 92,
+        topRecruiters: ['Microsoft', 'Amazon', 'Bosch', 'Infosys'],
+        studentRating: 4.8,
+        websiteUrl: formattedWebsite,
+        mapLocationQuery: mapLocation.trim() || `${collegeName} ${district}`,
+        distanceKmFromBlr: 12,
+        brochureUrl: ''
+      };
+      // 1. Write / Update /colleges/{colId} in Firestore
+      await saveCollege(collegePayload);
+      // 2. Compute default category cutoffs for CSE
+      const baseGM = Number(closingRank) || 1200;
+      const categoryMap: Record<string, number> = { GM: baseGM };
+      CUTOFF_CATEGORIES.forEach(cat => {
+        if (cat !== 'GM') {
+          const mult = CATEGORY_MULTIPLIERS[cat] || 1.0;
+          categoryMap[cat] = Math.round(baseGM * mult);
+        }
       });
-    }
-    setSelectedBranchCode('CSE');
-  };
-
-  const handleBranchChange = (code: string) => {
-    setSelectedBranchCode(code);
-    if (!managingCutoffsCollege) return;
-    const existing = cutoffs.find(c => c.collegeId === managingCutoffsCollege.id && c.branchCode === code);
-    if (existing) {
-      setCurrentCutoffMap({ ...existing.categoryCutoffs });
-    } else {
-      setCurrentCutoffMap({
-        GM: 5000,
-        '2A': 10000,
-        '2B': 11000,
-        '3A': 7000,
-        '3B': 8000,
-        SC: 25000,
-        ST: 30000
+      const cutoffPayload: BranchCutoff = {
+        id: `cut-${colId}-cse`,
+        collegeId: colId,
+        branchCode: 'CSE',
+        branchName: 'Computer Science & Engineering',
+        categoryCutoffs: categoryMap
+      };
+      await saveCutoff(cutoffPayload);
+      // 3. Trigger Broadcast Notification if checked
+      if (notifyStudents) {
+        await sendBroadcast({
+          title: '🏛️ New College & Cutoffs Updated',
+          message: `${collegeName} (${cetCode}) cutoffs & August 2026 fee updated. Check your admission probability now!`,
+          type: 'COUNSELLING',
+          actionType: 'NAV_COUNSELLING'
+        });
+      }
+      setStatusMessage({ 
+        text: `College ${collegeName} (${cetCode}) saved successfully to Live Firestore!`, 
+        type: 'success' 
       });
+      handleResetForm();
+    } catch (err: any) {
+      setStatusMessage({ 
+        text: 'Error saving college: ' + (err?.message || err), 
+        type: 'error' 
+      });
+    } finally {
+      setIsSaving(false);
     }
   };
-
-  const handleSaveCutoffRecord = async () => {
-    if (!managingCutoffsCollege) return;
-    const branchMeta = STANDARD_BRANCHES.find(b => b.code === selectedBranchCode);
-    const cutoffId = `cut-${managingCutoffsCollege.id}-${selectedBranchCode.toLowerCase()}`;
-    const newCutoff: BranchCutoff = {
-      id: cutoffId,
-      collegeId: managingCutoffsCollege.id,
-      branchCode: selectedBranchCode,
-      branchName: branchMeta?.name || selectedBranchCode,
-      categoryCutoffs: currentCutoffMap
-    };
-    await saveCutoff(newCutoff);
-    alert(`Closing cutoffs for ${selectedBranchCode} at ${managingCutoffsCollege.name} saved!`);
-  };
-
-  const filtered = colleges.filter(c => {
-    if (selectedDistrict !== 'ALL' && c.district !== selectedDistrict) return false;
-    if (selectedType !== 'ALL' && c.collegeType !== selectedType) return false;
-    if (!searchQuery.trim()) return true;
-    const q = searchQuery.toLowerCase();
-    return c.name.toLowerCase().includes(q) || c.code.toLowerCase().includes(q);
+// Filtered Colleges List
+  const filteredColleges = colleges.filter(c => {
+    if (filterDistrict !== 'ALL' && c.district !== filterDistrict) return false;
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const matchName = c.name.toLowerCase().includes(q);
+      const matchCode = c.code.toLowerCase().includes(q);
+      if (!matchName && !matchCode) return false;
+    }
+    return true;
   });
-
   return (
-    <div className="space-y-6">
-      {/* Header Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-card border border-admin-cardBorder shadow-sm">
-        <div>
-          <h2 className="text-lg font-bold text-admin-heading flex items-center gap-2">
-            <Building2 className="w-5 h-5 text-admin-primary" />
-            Karnataka Engineering Colleges & Cutoffs Database
-          </h2>
-          <p className="text-xs text-admin-muted mt-0.5">
-            Manage all 31 districts across Karnataka, NIRF rankings, fees, and category-wise closing ranks.
+    <div className="w-full space-y-6 animate-fadeIn pb-16">
+      {/* Outer Card matching exact Android/Material design */}
+      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5 sm:p-7 space-y-5">
+        {/* Title Header */}
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <span className="text-xl">🏛️</span>
+            <h2 className="text-lg font-black text-slate-900 tracking-tight">
+              {editingId ? 'Edit College & Cutoffs' : 'Add New College & Cutoffs'}
+            </h2>
+          </div>
+          <p className="text-sm font-bold text-[#0D9488]">
+            Directly connected to Student College Recommendation & Predictor
           </p>
         </div>
-
-        <button
-          onClick={handleOpenAdd}
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-button bg-admin-royal hover:bg-blue-700 text-white font-bold text-xs shadow transition-all active:scale-95"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Add Engineering College</span>
-        </button>
-      </div>
-
-      {/* District & Type Filter Bar */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-white p-4 rounded-card border border-admin-cardBorder shadow-sm">
-        <div>
-          <label className="block text-[11px] font-bold text-slate-500 mb-1">Filter by District (31 Karnataka Districts)</label>
-          <select
-            value={selectedDistrict}
-            onChange={(e) => setSelectedDistrict(e.target.value)}
-            className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold"
-          >
-            <option value="ALL">All 31 Karnataka Districts</option>
-            {KARNATAKA_DISTRICTS.map(d => (
-              <option key={d} value={d}>{d}</option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label className="block text-[11px] font-bold text-slate-500 mb-1">College Type</label>
-          <select
-            value={selectedType}
-            onChange={(e) => setSelectedType(e.target.value)}
-            className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold"
-          >
-            <option value="ALL">All College Types</option>
-            {collegeTypes.map(t => (
-              <option key={t} value={t}>{t}</option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label className="block text-[11px] font-bold text-slate-500 mb-1">Search by Name or CET Code</label>
+        {/* Status Alert */}
+        {statusMessage && (
+          <div className={`p-3 rounded-xl text-sm font-bold flex items-center gap-2 ${
+            statusMessage.type === 'success' 
+              ? 'bg-emerald-50 text-emerald-800 border border-emerald-300' 
+              : 'bg-rose-50 text-rose-800 border border-rose-300'
+          }`}>
+            {statusMessage.type === 'success' ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : '⚠️'}
+            <span>{statusMessage.text}</span>
+          </div>
+        )}
+        <form onSubmit={handleSaveCollege} className="space-y-4">
+          {/* 1. Cutoff Rank Range & Category Matching (Light Teal Container) */}
+          <div className="bg-[#F0FDFA] rounded-2xl border border-[#99F6E4] p-4 space-y-3">
+            <div className="flex items-center gap-2 text-sm font-extrabold text-[#0F766E]">
+              <span>🎯</span>
+              <span>Cutoff Rank Range & Category Matching</span>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              {/* Rank Range Dropdown */}
+              <div className="relative">
+                <label className="absolute -top-2.5 left-3 bg-[#F0FDFA] px-1.5 text-[11px] font-semibold text-slate-600 z-10">
+                  Rank Range
+                </label>
+                <div className="relative">
+                  <select
+                    value={rankRange}
+                    onChange={(e) => handleRankRangeChange(e.target.value)}
+                    className="w-full h-14 pl-4 pr-10 bg-white border border-slate-400 rounded-xl text-sm font-bold text-slate-900 appearance-none focus:outline-none focus:ring-2 focus:ring-[#0D9488]"
+                  >
+                    {RANK_RANGES.map(r => (
+                      <option key={r} value={r}>{r}</option>
+                    ))}
+                  </select>
+                  <ChevronDown className="w-4 h-4 text-slate-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                </div>
+              </div>
+              {/* Category Dropdown */}
+              <div className="relative">
+                <label className="absolute -top-2.5 left-3 bg-[#F0FDFA] px-1.5 text-[11px] font-semibold text-slate-600 z-10">
+                  Category
+                </label>
+                <div className="relative">
+                  <select
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value)}
+                    className="w-full h-14 pl-4 pr-10 bg-white border border-slate-400 rounded-xl text-sm font-bold text-slate-900 appearance-none focus:outline-none focus:ring-2 focus:ring-[#0D9488]"
+                  >
+                    {CUTOFF_CATEGORIES.map(c => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                  <ChevronDown className="w-4 h-4 text-slate-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                </div>
+              </div>
+            </div>
+            {/* Cutoff Closing Rank (#) */}
+            <div className="relative">
+              <label className="absolute -top-2.5 left-3 bg-[#F0FDFA] px-1.5 text-[11px] font-semibold text-slate-600 z-10">
+                Cutoff Closing Rank (#)
+              </label>
+              <input
+                type="number"
+                value={closingRank}
+                onChange={(e) => setClosingRank(parseInt(e.target.value) || 1)}
+                className="w-full h-14 px-4 bg-white border border-slate-400 rounded-xl text-sm font-bold font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#0D9488]"
+                required
+              />
+            </div>
+          </div>
+          {/* 2. College Name */}
           <div className="relative">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
-              placeholder="e.g. RV College or E001..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white"
+              value={collegeName}
+              onChange={(e) => setCollegeName(e.target.value)}
+              placeholder="College Name"
+              className="w-full h-14 px-4 bg-white border border-slate-400 rounded-xl text-sm font-medium text-slate-900 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-[#0D9488]"
+              required
             />
           </div>
-        </div>
-      </div>
-
-      {/* Add / Edit Form Modal (15 Fields) */}
-      {isFormOpen && (
-        <div className="bg-white rounded-card border-2 border-admin-primary/40 shadow-xl p-6 animate-fadeIn">
-          <div className="flex items-center justify-between mb-5 pb-3 border-b border-slate-100">
-            <h3 className="font-bold text-base text-admin-heading flex items-center gap-2">
-              <span className="p-1 rounded-md bg-indigo-50 text-admin-primary">
-                {editingId ? <Edit3 className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-              </span>
-              {editingId ? 'Edit College Details' : 'Add New Karnataka Engineering College (15 Fields)'}
-            </h3>
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Row 1: Name, Code, District, Type */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-              <div className="md:col-span-2">
-                <label className="block text-xs font-semibold text-admin-heading mb-1">College Full Name</label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="e.g. R.V. College of Engineering"
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-admin-heading mb-1">KEA CET Code</label>
-                <input
-                  type="text"
-                  value={formData.code}
-                  onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
-                  placeholder="e.g. E001"
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold font-mono"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-admin-heading mb-1">District Preference</label>
+          {/* 3. CET Code & District Preference */}
+          <div className="grid grid-cols-2 gap-3">
+            {/* CET Code */}
+            <div className="relative">
+              <input
+                type="text"
+                value={cetCode}
+                onChange={(e) => setCetCode(e.target.value.toUpperCase())}
+                placeholder="CET Code (e.g. E001)"
+                className="w-full h-14 px-4 bg-white border border-slate-400 rounded-xl text-sm font-bold font-mono text-slate-900 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-[#0D9488]"
+                required
+              />
+            </div>
+            {/* District Preference */}
+            <div className="relative">
+              <label className="absolute -top-2.5 left-3 bg-white px-1.5 text-[11px] font-semibold text-slate-600 z-10">
+                District Preference
+              </label>
+              <div className="relative">
                 <select
-                  value={formData.district}
-                  onChange={(e) => setFormData({ ...formData, district: e.target.value })}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium"
+                  value={district}
+                  onChange={(e) => setDistrict(e.target.value)}
+                  className="w-full h-14 pl-4 pr-10 bg-white border border-slate-400 rounded-xl text-sm font-bold text-slate-900 appearance-none focus:outline-none focus:ring-2 focus:ring-[#0D9488]"
                 >
                   {KARNATAKA_DISTRICTS.map(d => (
                     <option key={d} value={d}>{d}</option>
                   ))}
                 </select>
+                <ChevronDown className="w-4 h-4 text-slate-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
               </div>
             </div>
-
-            {/* Row 2: College Type, NAAC, NIRF, Rating */}
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-              <div>
-                <label className="block text-xs font-semibold text-admin-heading mb-1">College Type</label>
+          </div>
+          {/* 4. College Type & Tuition Fee */}
+          <div className="grid grid-cols-2 gap-3">
+            {/* College Type */}
+            <div className="relative">
+              <label className="absolute -top-2.5 left-3 bg-white px-1.5 text-[11px] font-semibold text-slate-600 z-10">
+                College Type
+              </label>
+              <div className="relative">
                 <select
-                  value={formData.collegeType}
-                  onChange={(e) => setFormData({ ...formData, collegeType: e.target.value as CollegeType })}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium"
+                  value={collegeType}
+                  onChange={(e) => setCollegeType(e.target.value as CollegeType)}
+                  className="w-full h-14 pl-4 pr-10 bg-white border border-slate-400 rounded-xl text-sm font-bold text-slate-900 appearance-none focus:outline-none focus:ring-2 focus:ring-[#0D9488]"
                 >
-                  {collegeTypes.map(t => (
-                    <option key={t} value={t}>{t}</option>
-                  ))}
+                  <option value="Autonomous">Autonomous</option>
+                  <option value="Government">Government</option>
+                  <option value="Private">Private</option>
+                  <option value="Deemed University">Deemed University</option>
+                  <option value="Private University">Private University</option>
+                  <option value="Other">Other</option>
                 </select>
+                <ChevronDown className="w-4 h-4 text-slate-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
               </div>
-
+            </div>
+            {/* Tuition Fee */}
+            <div className="relative">
+              <label className="absolute -top-2.5 left-3 bg-white px-1.5 text-[11px] font-semibold text-slate-600 z-10">
+                Tuition Fee (₹/yr)
+              </label>
+              <input
+                type="number"
+                value={tuitionFee}
+                onChange={(e) => setTuitionFee(parseInt(e.target.value) || 0)}
+                className="w-full h-14 px-4 bg-white border border-slate-400 rounded-xl text-sm font-bold font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#0D9488]"
+              />
+            </div>
+          </div>
+          {/* 5. In-Campus Hostel Container */}
+          <div className="bg-white rounded-2xl border border-slate-300 p-4 space-y-3">
+            <div className="flex items-center justify-between">
               <div>
-                <label className="block text-xs font-semibold text-admin-heading mb-1">NAAC Grade</label>
+                <h4 className="text-sm font-extrabold text-slate-900">In-Campus Hostel</h4>
+                <p className="text-[11px] text-slate-500">Available on campus</p>
+              </div>
+              {/* Toggle Switch */}
+              <button
+                type="button"
+                onClick={() => setHasHostel(!hasHostel)}
+                className={`w-14 h-8 rounded-full transition-colors p-1 flex items-center ${
+                  hasHostel ? 'bg-[#4F46E5] justify-end' : 'bg-slate-300 justify-start'
+                }`}
+              >
+                <span className="w-6 h-6 rounded-full bg-white shadow-md block" />
+              </button>
+            </div>
+            {hasHostel && (
+              <div className="relative pt-1">
+                <label className="absolute -top-1 left-3 bg-white px-1.5 text-[11px] font-semibold text-slate-600 z-10">
+                  Hostel Fee (₹/yr)
+                </label>
+                <input
+                  type="number"
+                  value={hostelFee}
+                  onChange={(e) => setHostelFee(parseInt(e.target.value) || 0)}
+                  className="w-full h-14 px-4 bg-white border border-slate-400 rounded-xl text-sm font-bold font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#0D9488]"
+                />
+              </div>
+            )}
+          </div>
+          {/* 6. NAAC Grade & NIRF Rank */}
+          <div className="grid grid-cols-2 gap-3">
+            {/* NAAC Grade */}
+            <div className="relative">
+              <label className="absolute -top-2.5 left-3 bg-white px-1.5 text-[11px] font-semibold text-slate-600 z-10">
+                NAAC Grade
+              </label>
+              <div className="relative">
                 <select
-                  value={formData.naacGrade}
-                  onChange={(e) => setFormData({ ...formData, naacGrade: e.target.value as NaacGrade })}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold"
+                  value={naacGrade}
+                  onChange={(e) => setNaacGrade(e.target.value as NaacGrade)}
+                  className="w-full h-14 pl-4 pr-10 bg-white border border-slate-400 rounded-xl text-sm font-bold text-slate-900 appearance-none focus:outline-none focus:ring-2 focus:ring-[#0D9488]"
                 >
-                  {naacGrades.map(g => (
+                  {['A++', 'A+', 'A', 'B++', 'B+', 'B', 'NA'].map(g => (
                     <option key={g} value={g}>{g}</option>
                   ))}
                 </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-admin-heading mb-1">NIRF National Rank</label>
-                <input
-                  type="number"
-                  value={formData.nirfRank}
-                  onChange={(e) => setFormData({ ...formData, nirfRank: Number(e.target.value) })}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-admin-heading mb-1">Student Rating (out of 5)</label>
-                <input
-                  type="number"
-                  step="0.1"
-                  max="5.0"
-                  value={formData.studentRating}
-                  onChange={(e) => setFormData({ ...formData, studentRating: Number(e.target.value) })}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs"
-                />
+                <ChevronDown className="w-4 h-4 text-slate-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
               </div>
             </div>
-
-            {/* Row 3: Fees & Placement stats */}
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-              <div>
-                <label className="block text-xs font-semibold text-admin-heading mb-1">Tuition Fee / Year (₹)</label>
-                <input
-                  type="number"
-                  value={formData.tuitionFeePerYear}
-                  onChange={(e) => setFormData({ ...formData, tuitionFeePerYear: Number(e.target.value) })}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-emerald-800"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-admin-heading mb-1">Hostel Fee / Year (₹)</label>
-                <input
-                  type="number"
-                  value={formData.hostelFeePerYear}
-                  onChange={(e) => setFormData({ ...formData, hostelFeePerYear: Number(e.target.value) })}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-admin-heading mb-1">Avg Package (LPA)</label>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={formData.avgPackageLpa}
-                  onChange={(e) => setFormData({ ...formData, avgPackageLpa: Number(e.target.value) })}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-indigo-700"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-admin-heading mb-1">Highest Package (LPA)</label>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={formData.highestPackageLpa}
-                  onChange={(e) => setFormData({ ...formData, highestPackageLpa: Number(e.target.value) })}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-indigo-700"
-                />
-              </div>
-            </div>
-
-            {/* Row 4: Hostel switch & Placement % & Distance */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div>
-                <label className="block text-xs font-semibold text-admin-heading mb-1">Placement Percentage (%)</label>
-                <input
-                  type="number"
-                  value={formData.placementPercentage}
-                  onChange={(e) => setFormData({ ...formData, placementPercentage: Number(e.target.value) })}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-admin-heading mb-1">Distance from Bengaluru (km)</label>
-                <input
-                  type="number"
-                  value={formData.distanceKmFromBlr}
-                  onChange={(e) => setFormData({ ...formData, distanceKmFromBlr: Number(e.target.value) })}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs"
-                />
-              </div>
-
-              <div className="flex items-center gap-2 pt-6">
-                <input
-                  type="checkbox"
-                  id="hostelCheck"
-                  checked={formData.hasHostel}
-                  onChange={(e) => setFormData({ ...formData, hasHostel: e.target.checked })}
-                  className="w-4 h-4 text-admin-primary rounded"
-                />
-                <label htmlFor="hostelCheck" className="text-xs font-bold text-admin-heading cursor-pointer">
-                  In-Campus Hostel Available
-                </label>
-              </div>
-            </div>
-
-            {/* Row 5: Banner Image URL & Gallery Upload */}
-            <div>
-              <label className="block text-xs font-semibold text-admin-heading mb-1">
-                Banner Image URL or Upload from Local Gallery
+            {/* NIRF Rank */}
+            <div className="relative">
+              <label className="absolute -top-2.5 left-3 bg-white px-1.5 text-[11px] font-semibold text-slate-600 z-10">
+                NIRF Rank (#)
               </label>
-              <div className="flex flex-col sm:flex-row gap-2">
-                <input
-                  type="text"
-                  value={formData.imageResUrl}
-                  onChange={(e) => setFormData({ ...formData, imageResUrl: e.target.value })}
-                  placeholder="https://images.unsplash.com/... or data:image/..."
-                  className="flex-1 p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs"
-                />
-                <label className="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold cursor-pointer shrink-0 border border-slate-300">
-                  <Upload className="w-3.5 h-3.5" />
-                  <span>Upload Image</span>
-                  <input type="file" accept="image/*" onChange={handleGalleryUpload} className="hidden" />
-                </label>
-              </div>
+              <input
+                type="number"
+                value={nirfRank}
+                onChange={(e) => setNirfRank(parseInt(e.target.value) || 0)}
+                className="w-full h-14 px-4 bg-white border border-slate-400 rounded-xl text-sm font-bold font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#0D9488]"
+              />
             </div>
-
-            {/* Row 6: Website & Map query */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-semibold text-admin-heading mb-1">Official Website URL</label>
-                <input
-                  type="url"
-                  value={formData.websiteUrl}
-                  onChange={(e) => setFormData({ ...formData, websiteUrl: e.target.value })}
-                  placeholder="https://college.edu.in"
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-admin-heading mb-1">Google Maps Location Query</label>
-                <input
-                  type="text"
-                  value={formData.mapLocationQuery}
-                  onChange={(e) => setFormData({ ...formData, mapLocationQuery: e.target.value })}
-                  placeholder="e.g. RV College of Engineering Mysuru Road Bengaluru"
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs"
-                />
-              </div>
+          </div>
+          {/* 7. Avg Package & Highest Package */}
+          <div className="grid grid-cols-2 gap-3">
+            {/* Avg Package */}
+            <div className="relative">
+              <label className="absolute -top-2.5 left-3 bg-white px-1.5 text-[11px] font-semibold text-slate-600 z-10">
+                Avg Package (LPA)
+              </label>
+              <input
+                type="number"
+                step="0.1"
+                value={avgPackage}
+                onChange={(e) => setAvgPackage(parseFloat(e.target.value) || 0)}
+                className="w-full h-14 px-4 bg-white border border-slate-400 rounded-xl text-sm font-bold font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#0D9488]"
+              />
             </div>
-
-            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
-              <button
-                type="button"
-                onClick={() => setIsFormOpen(false)}
-                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="px-5 py-2 rounded-xl text-xs font-bold bg-admin-primary hover:bg-indigo-700 text-white shadow-md"
-              >
-                Save College Entry
-              </button>
+            {/* Highest Pkg */}
+            <div className="relative">
+              <label className="absolute -top-2.5 left-3 bg-white px-1.5 text-[11px] font-semibold text-slate-600 z-10">
+                Highest Pkg (LPA)
+              </label>
+              <input
+                type="number"
+                step="0.1"
+                value={highestPackage}
+                onChange={(e) => setHighestPackage(parseFloat(e.target.value) || 0)}
+                className="w-full h-14 px-4 bg-white border border-slate-400 rounded-xl text-sm font-bold font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#0D9488]"
+              />
             </div>
-          </form>
-        </div>
-      )}
-
-      {/* College List Cards */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {filtered.map(c => {
-          const collegeCutoffs = cutoffs.filter(cut => cut.collegeId === c.id);
-          return (
-            <div
-              key={c.id}
-              className="bg-white rounded-card border border-admin-cardBorder shadow-sm hover:shadow-md transition-all overflow-hidden flex flex-col justify-between"
-            >
-              <div>
-                <div className="relative h-40 w-full overflow-hidden bg-slate-100">
-                  <img
-                    src={c.imageResUrl}
-                    alt={c.name}
-                    className="w-full h-full object-cover"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
-                  <div className="absolute bottom-3 left-3 right-3 text-white">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-mono text-[11px] font-black px-2 py-0.5 rounded bg-amber-400 text-amber-950 shadow">
-                        CET: {c.code}
-                      </span>
-                      <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-white/30 backdrop-blur-sm">
-                        {c.collegeType}
-                      </span>
-                      <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-emerald-500/80">
-                        NAAC {c.naacGrade}
-                      </span>
-                    </div>
-                    <h3 className="font-bold text-base leading-tight drop-shadow">
-                      {c.name}
-                    </h3>
-                  </div>
-                </div>
-
-                <div className="p-4 space-y-3">
-                  <div className="flex items-center justify-between text-xs text-slate-600">
-                    <span className="flex items-center gap-1 font-semibold text-slate-700">
-                      <MapPin className="w-3.5 h-3.5 text-red-500" />
-                      {c.district} ({c.distanceKmFromBlr} km from BLR)
-                    </span>
-                    <span className="font-bold text-indigo-700">NIRF #{c.nirfRank}</span>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-2 p-2.5 rounded-xl bg-slate-50 text-center text-xs">
-                    <div>
-                      <span className="text-[10px] text-slate-400 font-semibold block">Avg Package</span>
-                      <strong className="text-indigo-700">{c.avgPackageLpa} LPA</strong>
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-slate-400 font-semibold block">Placement</span>
-                      <strong className="text-emerald-700">{c.placementPercentage}%</strong>
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-slate-400 font-semibold block">Govt CET Fee</span>
-                      <strong className="text-slate-800">₹{c.tuitionFeePerYear.toLocaleString()}</strong>
-                    </div>
-                  </div>
-
-                  {collegeCutoffs.length > 0 && (
-                    <div className="space-y-1">
-                      <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wide">
-                        Sample Closing Ranks (GM)
-                      </span>
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        {collegeCutoffs.map(cut => (
-                          <span key={cut.id} className="text-[11px] px-2 py-0.5 rounded bg-indigo-50 border border-indigo-200 text-indigo-900 font-medium">
-                            <strong>{cut.branchCode}:</strong> {cut.categoryCutoffs['GM'] || '-'}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="p-4 pt-0 border-t border-slate-100 flex items-center justify-between gap-2 mt-2">
+          </div>
+          {/* 8. College Banner Image Container */}
+          <div className="bg-[#EEF2FF]/50 rounded-2xl border border-indigo-200/70 p-4 space-y-3">
+            <div className="flex items-center gap-2 text-sm font-bold text-indigo-900">
+              <ImageIcon className="w-4 h-4 text-indigo-600" />
+              <span>College Banner Image</span>
+            </div>
+            {/* URL Input */}
+            <div className="relative">
+              <label className="absolute -top-2.5 left-3 bg-[#F5F7FF] px-1.5 text-[11px] font-semibold text-slate-600 z-10">
+                College Banner Image URL
+              </label>
+              <textarea
+                rows={2}
+                value={bannerUrl}
+                onChange={(e) => setBannerUrl(e.target.value)}
+                placeholder="https://images.unsplash.com/photo-..."
+                className="w-full p-3 bg-white border border-slate-400 rounded-xl text-sm font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#0D9488]"
+              />
+            </div>
+            {/* Upload Button */}
+            <label className="cursor-pointer w-full h-12 rounded-xl bg-white hover:bg-slate-50 text-indigo-900 border border-slate-300 text-sm font-bold shadow-sm flex items-center justify-center gap-2 transition-all active:scale-98">
+              <span>📄 📸</span>
+              <span>Upload from Gallery / Files</span>
+              <input 
+                type="file" 
+                accept="image/*" 
+                onChange={handleGalleryUpload} 
+                className="hidden" 
+              />
+            </label>
+            {/* Preview with Delete Badge */}
+            {bannerUrl && (
+              <div className="relative h-44 w-full rounded-xl overflow-hidden border border-slate-300 shadow-sm">
+                <img src={bannerUrl} alt="College Banner" className="w-full h-full object-cover" />
                 <button
-                  onClick={() => handleOpenCutoffEditor(c)}
-                  className="px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold flex items-center gap-1.5 transition-colors"
+                  type="button"
+                  onClick={() => setBannerUrl('')}
+                  className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/70 hover:bg-black text-white flex items-center justify-center font-bold text-sm shadow-md transition-colors"
+                  title="Remove Image"
                 >
-                  <Table className="w-3.5 h-3.5" />
-                  <span>Manage Cutoffs</span>
+                  ✕
                 </button>
-
-                <div className="flex items-center gap-1">
-                  {c.websiteUrl && (
-                    <a
-                      href={c.websiteUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-slate-100"
-                      title="Visit Website"
-                    >
-                      <ExternalLink className="w-4 h-4" />
-                    </a>
-                  )}
+              </div>
+            )}
+          </div>
+          {/* 9. College Website URL */}
+          <div className="relative">
+            <label className="absolute -top-2.5 left-3 bg-white px-1.5 text-[11px] font-semibold text-slate-600 z-10">
+              College Website URL
+            </label>
+            <input
+              type="text"
+              value={websiteUrl}
+              onChange={(e) => setWebsiteUrl(e.target.value)}
+              placeholder="https://rvce.edu.in"
+              className="w-full h-14 px-4 bg-white border border-slate-400 rounded-xl text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#0D9488]"
+            />
+          </div>
+          {/* 10. Google College Map */}
+          <div className="relative">
+            <label className="absolute -top-2.5 left-3 bg-white px-1.5 text-[11px] font-semibold text-slate-600 z-10">
+              Google College Map (URL or Location Name)
+            </label>
+            <input
+              type="text"
+              value={mapLocation}
+              onChange={(e) => setMapLocation(e.target.value)}
+              placeholder="RV College of Engineering Bengaluru"
+              className="w-full h-14 px-4 bg-white border border-slate-400 rounded-xl text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#0D9488]"
+            />
+          </div>
+          {/* 11. Broadcast Notification Checkbox */}
+          <div className="p-4 bg-[#F0FDF4] rounded-2xl border border-emerald-300 flex items-start gap-3">
+            <input
+              type="checkbox"
+              id="notify-students-check"
+              checked={notifyStudents}
+              onChange={(e) => setNotifyStudents(e.target.checked)}
+              className="mt-1 w-5 h-5 rounded text-[#4F46E5] focus:ring-[#4F46E5] cursor-pointer"
+            />
+            <label htmlFor="notify-students-check" className="cursor-pointer">
+              <span className="text-sm font-bold text-emerald-950 block flex items-center gap-1.5">
+                <span>📢</span> Notify all students about this college / cutoff update
+              </span>
+              <span className="text-[11px] text-emerald-800 block mt-0.5 font-medium">
+                Sends push notification with direct link to College Predictor
+              </span>
+            </label>
+          </div>
+          {/* 12. Main Add College Button */}
+          <button
+            type="submit"
+            disabled={isSaving}
+            className="w-full h-14 rounded-full bg-[#16A34A] hover:bg-[#15803D] text-white text-sm font-black shadow-md flex items-center justify-center gap-2 transition-all active:scale-98 disabled:opacity-50"
+          >
+            {isSaving ? (
+              <RefreshCw className="w-5 h-5 animate-spin" />
+            ) : (
+              <>
+                <span className="text-base font-black">➕</span>
+                <span>{editingId ? 'Save College Changes' : 'Add College'}</span>
+              </>
+            )}
+          </button>
+          {/* 13. Send Notification Secondary Button */}
+          <button
+            type="button"
+            onClick={async () => {
+              await sendBroadcast({
+                title: '📢 KCET College Cutoffs Updated',
+                message: 'New college closing ranks & August 2026 fee updates are now live. Explore your eligible colleges now!',
+                type: 'COUNSELLING',
+                actionType: 'NAV_COUNSELLING'
+              });
+              notifySuccess('Notification pushed to all students successfully!', 'Broadcast Sent');
+            }}
+            className="w-full h-14 rounded-full bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 text-sm font-black shadow-sm flex items-center justify-center gap-2 transition-all active:scale-98"
+          >
+            <span className="text-base">🔔</span>
+            <span>📢 Send Notification to Students (Cutoffs Update)</span>
+          </button>
+        </form>
+      </div>
+      {/* Database Colleges Header & List */}
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-1">
+          <h3 className="text-base font-black text-slate-900">
+            Database Colleges ({colleges.length})
+          </h3>
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search colleges..."
+                className="pl-8 pr-3 py-1.5 bg-white border border-slate-300 rounded-xl text-sm font-medium focus:outline-none"
+              />
+            </div>
+            <select
+              value={filterDistrict}
+              onChange={(e) => setFilterDistrict(e.target.value)}
+              className="px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-700"
+            >
+              <option value="ALL">All Districts</option>
+              {KARNATAKA_DISTRICTS.map(d => (
+                <option key={d} value={d}>{d}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+        {/* College Cards List */}
+        {filteredColleges.length === 0 ? (
+          <div className="text-center py-10 bg-white rounded-2xl border border-slate-200 p-6">
+            <p className="text-sm text-slate-500 font-medium">No colleges match your filter.</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {filteredColleges.map((col) => (
+              <div 
+                key={col.id}
+                className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm hover:shadow transition-all space-y-3"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h4 className="font-extrabold text-sm text-slate-900">
+                      {col.name} {col.code ? `(${col.code})` : ''}
+                    </h4>
+                    <p className="text-sm text-slate-500 font-medium mt-0.5">
+                      Code: {col.code} • {col.district} • {col.collegeType}
+                    </p>
+                    <p className="text-sm font-bold text-[#4F46E5] mt-1">
+                      Fee: ₹{col.tuitionFeePerYear.toLocaleString()}/yr • NAAC {col.naacGrade} • NIRF #{col.nirfRank || 'N/A'}
+                    </p>
+                  </div>
                   <button
-                    onClick={() => handleEdit(c)}
-                    className="p-1.5 rounded-lg text-slate-400 hover:text-admin-primary hover:bg-slate-100"
-                    title="Edit College"
-                  >
-                    <Edit3 className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (confirm(`Delete college "${c.name}" and its branch cutoffs?`)) {
-                        deleteCollege(c.id);
+                    onClick={async () => {
+                      if (confirm(`Are you sure you want to delete ${col.name}?`)) {
+                        await deleteCollege(col.id);
                       }
                     }}
-                    className="p-1.5 rounded-lg text-slate-400 hover:text-admin-destructive hover:bg-red-50"
+                    className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"
                     title="Delete College"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
+                {/* 2 Bottom Action Buttons */}
+                <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-100">
+                  <button
+                    onClick={() => handleEditDetails(col)}
+                    className="h-11 rounded-full bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 text-sm font-bold shadow-sm flex items-center justify-center gap-1.5 transition-all active:scale-98"
+                  >
+                    <span>✏️</span>
+                    <span>Edit Details</span>
+                  </button>
+                  <button
+                    onClick={() => handleOpenCutoffModal(col)}
+                    className="h-11 rounded-full bg-[#4F46E5] hover:bg-[#4338CA] text-white text-sm font-bold shadow-sm flex items-center justify-center gap-1.5 transition-all active:scale-98"
+                  >
+                    <span>📊</span>
+                    <span>Edit Cutoffs</span>
+                  </button>
+                </div>
               </div>
-            </div>
-          );
-        })}
+            ))}
+          </div>
+        )}
       </div>
+            {/* Cutoff Management Modal (Exact Screenshot Layout & Real-time Database Connection) */}
+      {cutoffModalCollege && (() => {
+        const collegeCutoffs = cutoffs.filter(c => c && c.collegeId === cutoffModalCollege.id);
 
-      {/* Cutoffs Manager Modal */}
-      {managingCutoffsCollege && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-card max-w-lg w-full p-6 shadow-2xl animate-fadeIn max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
-              <div>
-                <h3 className="font-bold text-base text-admin-heading">Branch Closing Cutoff Manager</h3>
-                <p className="text-xs text-slate-500">{managingCutoffsCollege.name} ({managingCutoffsCollege.code})</p>
+        return (
+          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn">
+            <div className="bg-[#F5F4FA] rounded-[30px] max-w-md w-full p-6 shadow-2xl border border-slate-200/80 space-y-4 max-h-[90vh] overflow-y-auto flex flex-col">
+              {/* Header */}
+              <div className="flex items-center gap-2">
+                <span className="text-xl">📊</span>
+                <h3 className="font-extrabold text-base sm:text-lg text-slate-900 leading-tight">
+                  Cutoffs for {cutoffModalCollege.name}
+                </h3>
               </div>
-              <button
-                onClick={() => setManagingCutoffsCollege(null)}
-                className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 font-bold"
-              >
-                ✕
-              </button>
-            </div>
 
-            <div className="mb-4">
-              <label className="block text-xs font-semibold text-admin-heading mb-1.5">Select Branch</label>
-              <select
-                value={selectedBranchCode}
-                onChange={(e) => handleBranchChange(e.target.value)}
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold"
-              >
-                {STANDARD_BRANCHES.map(b => (
-                  <option key={b.code} value={b.code}>{b.code} — {b.name}</option>
-                ))}
-              </select>
-            </div>
+              {/* Section 1: Set Category Cutoff Ranks */}
+              <div className="space-y-3">
+                <h4 className="font-extrabold text-sm text-slate-900">
+                  Set Category Cutoff Ranks
+                </h4>
 
-            <div className="space-y-3 mb-6">
-              <span className="text-xs font-bold text-slate-700 block">
-                Category Closing Ranks (General Merit & Reservations)
-              </span>
-              <div className="grid grid-cols-2 gap-3">
-                {CUTOFF_CATEGORIES.map(cat => (
-                  <div key={cat} className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-                    <label className="block text-[11px] font-bold text-indigo-700 mb-1">{cat} Category Rank</label>
+                {/* Row 1: Branch Code & Branch Name */}
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div className="relative bg-white rounded-2xl border border-slate-300 p-2.5 pt-1.5 focus-within:border-indigo-600 focus-within:ring-1 focus-within:ring-indigo-600 shadow-sm">
+                    <label className="text-[11px] font-bold text-slate-500 block leading-tight">
+                      Branch Code (e.g. CSE)
+                    </label>
                     <input
-                      type="number"
-                      value={currentCutoffMap[cat] || ''}
-                      onChange={(e) => setCurrentCutoffMap({ ...currentCutoffMap, [cat]: Number(e.target.value) })}
-                      placeholder="e.g. 1500"
-                      className="w-full p-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold"
+                      type="text"
+                      value={modalBranchCode}
+                      onChange={(e) => handleBranchCodeInputChange(e.target.value)}
+                      placeholder="CSE"
+                      className="w-full font-black text-slate-900 text-sm focus:outline-none bg-transparent mt-0.5"
                     />
                   </div>
-                ))}
+
+                  <div className="relative bg-white rounded-2xl border border-slate-300 p-2.5 pt-1.5 focus-within:border-indigo-600 focus-within:ring-1 focus-within:ring-indigo-600 shadow-sm">
+                    <label className="text-[11px] font-bold text-slate-500 block leading-tight">
+                      Branch Name
+                    </label>
+                    <input
+                      type="text"
+                      value={modalBranchName}
+                      onChange={(e) => setModalBranchName(e.target.value)}
+                      placeholder="Computer Science & Engineering"
+                      className="w-full font-black text-slate-900 text-sm focus:outline-none bg-transparent mt-0.5 truncate"
+                    />
+                  </div>
+                </div>
+
+                {/* Row 2: GM Rank | 2A Rank | 2B Rank */}
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="relative bg-white rounded-2xl border border-slate-300 p-2.5 pt-1.5 focus-within:border-indigo-600 focus-within:ring-1 focus-within:ring-indigo-600 shadow-sm">
+                    <label className="text-[11px] font-bold text-slate-500 block leading-tight">GM Rank</label>
+                    <input
+                      type="number"
+                      value={modalCategoryRanks.GM ?? ''}
+                      onChange={(e) => setModalCategoryRanks({ ...modalCategoryRanks, GM: e.target.value })}
+                      placeholder="120"
+                      className="w-full font-black text-slate-900 text-sm focus:outline-none bg-transparent mt-0.5"
+                    />
+                  </div>
+
+                  <div className="relative bg-white rounded-2xl border border-slate-300 p-2.5 pt-1.5 focus-within:border-indigo-600 focus-within:ring-1 focus-within:ring-indigo-600 shadow-sm">
+                    <label className="text-[11px] font-bold text-slate-500 block leading-tight">2A Rank</label>
+                    <input
+                      type="number"
+                      value={modalCategoryRanks['2A'] ?? ''}
+                      onChange={(e) => setModalCategoryRanks({ ...modalCategoryRanks, '2A': e.target.value })}
+                      placeholder="210"
+                      className="w-full font-black text-slate-900 text-sm focus:outline-none bg-transparent mt-0.5"
+                    />
+                  </div>
+
+                  <div className="relative bg-white rounded-2xl border border-slate-300 p-2.5 pt-1.5 focus-within:border-indigo-600 focus-within:ring-1 focus-within:ring-indigo-600 shadow-sm">
+                    <label className="text-[11px] font-bold text-slate-500 block leading-tight">2B Rank</label>
+                    <input
+                      type="number"
+                      value={modalCategoryRanks['2B'] ?? ''}
+                      onChange={(e) => setModalCategoryRanks({ ...modalCategoryRanks, '2B': e.target.value })}
+                      placeholder="2300"
+                      className="w-full font-black text-slate-900 text-sm focus:outline-none bg-transparent mt-0.5"
+                    />
+                  </div>
+                </div>
+
+                {/* Row 3: 3A Rank | 3B Rank | SC Rank */}
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="relative bg-white rounded-2xl border border-slate-300 p-2.5 pt-1.5 focus-within:border-indigo-600 focus-within:ring-1 focus-within:ring-indigo-600 shadow-sm">
+                    <label className="text-[11px] font-bold text-slate-500 block leading-tight">3A Rank</label>
+                    <input
+                      type="number"
+                      value={modalCategoryRanks['3A'] ?? ''}
+                      onChange={(e) => setModalCategoryRanks({ ...modalCategoryRanks, '3A': e.target.value })}
+                      placeholder="1400"
+                      className="w-full font-black text-slate-900 text-sm focus:outline-none bg-transparent mt-0.5"
+                    />
+                  </div>
+
+                  <div className="relative bg-white rounded-2xl border border-slate-300 p-2.5 pt-1.5 focus-within:border-indigo-600 focus-within:ring-1 focus-within:ring-indigo-600 shadow-sm">
+                    <label className="text-[11px] font-bold text-slate-500 block leading-tight">3B Rank</label>
+                    <input
+                      type="number"
+                      value={modalCategoryRanks['3B'] ?? ''}
+                      onChange={(e) => setModalCategoryRanks({ ...modalCategoryRanks, '3B': e.target.value })}
+                      placeholder="1500"
+                      className="w-full font-black text-slate-900 text-sm focus:outline-none bg-transparent mt-0.5"
+                    />
+                  </div>
+
+                  <div className="relative bg-white rounded-2xl border border-slate-300 p-2.5 pt-1.5 focus-within:border-indigo-600 focus-within:ring-1 focus-within:ring-indigo-600 shadow-sm">
+                    <label className="text-[11px] font-bold text-slate-500 block leading-tight">SC Rank</label>
+                    <input
+                      type="number"
+                      value={modalCategoryRanks.SC ?? ''}
+                      onChange={(e) => setModalCategoryRanks({ ...modalCategoryRanks, SC: e.target.value })}
+                      placeholder="12000"
+                      className="w-full font-black text-slate-900 text-sm focus:outline-none bg-transparent mt-0.5"
+                    />
+                  </div>
+                </div>
+
+                {/* Row 4: ST Rank (Full Width) */}
+                <div className="relative bg-white rounded-2xl border border-slate-300 p-2.5 pt-1.5 focus-within:border-indigo-600 focus-within:ring-1 focus-within:ring-indigo-600 shadow-sm">
+                  <label className="text-[11px] font-bold text-slate-500 block leading-tight">ST Rank</label>
+                  <input
+                    type="number"
+                    value={modalCategoryRanks.ST ?? ''}
+                    onChange={(e) => setModalCategoryRanks({ ...modalCategoryRanks, ST: e.target.value })}
+                    placeholder="18000"
+                    className="w-full font-black text-slate-900 text-sm focus:outline-none bg-transparent mt-0.5"
+                  />
+                </div>
+
+                {/* Save Button (Green Pill) */}
+                <button
+                  type="button"
+                  onClick={handleSaveModalCutoff}
+                  className="w-full py-3 rounded-2xl bg-[#10B981] hover:bg-[#059669] text-white font-black text-sm shadow-md flex items-center justify-center gap-2 transition-all active:scale-98"
+                >
+                  <span className="text-base">💾</span>
+                  <span>Save Branch Cutoff</span>
+                </button>
+              </div>
+
+              {/* Section 2: Existing Saved Cutoffs List */}
+              <div className="space-y-2.5 pt-2 border-t border-slate-200/80">
+                <h4 className="font-extrabold text-sm text-slate-900">
+                  Existing Saved Cutoffs ({collegeCutoffs.length})
+                </h4>
+
+                {collegeCutoffs.length === 0 ? (
+                  <div className="p-3 bg-white rounded-2xl border border-slate-200 text-center text-xs font-semibold text-slate-500">
+                    No cutoffs saved for this college yet. Use the form above to add branch cutoffs.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {collegeCutoffs.map((cut) => (
+                      <div
+                        key={cut.id}
+                        className="bg-white rounded-2xl p-3.5 shadow-sm border border-slate-200 flex items-center justify-between gap-2"
+                      >
+                        <span className="font-extrabold text-slate-800 text-xs sm:text-sm">
+                          {cut.branchCode}: GM #{cut.categoryCutoffs?.GM ?? 0} | 2A #{cut.categoryCutoffs?.['2A'] ?? 0} | SC #{cut.categoryCutoffs?.SC ?? 0}
+                        </span>
+
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const ok = await requestConfirm({
+                              title: 'Delete Branch Cutoff',
+                              itemName: `${cut.branchCode} - ${cutoffModalCollege?.name || 'College'}`,
+                              message: `Are you sure you want to delete the cutoff matrix for ${cut.branchCode}? Both Web and Android apps will no longer show these cutoffs.`,
+                              isDestructive: true
+                            });
+                            if (ok) {
+                              await deleteCutoff(cut.id);
+                              notifySuccess(`Deleted ${cut.branchCode} cutoff from ${cutoffModalCollege?.name || 'college'}.`, 'Cutoff Deleted');
+                            }
+                          }}
+                          className="p-1.5 text-[#DC2626] hover:bg-rose-50 rounded-lg transition-colors shrink-0"
+                          title="Delete Cutoff"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Footer Done Button */}
+              <div className="flex justify-end pt-2 border-t border-slate-200/80">
+                <button
+                  type="button"
+                  onClick={() => setCutoffModalCollege(null)}
+                  className="px-8 py-2.5 rounded-2xl bg-[#5B4DFB] hover:bg-[#4E3EF8] text-white font-black text-sm shadow-md transition-all active:scale-95"
+                >
+                  Done
+                </button>
               </div>
             </div>
-
-            <div className="flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setManagingCutoffsCollege(null)}
-                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl"
-              >
-                Close
-              </button>
-              <button
-                type="button"
-                onClick={handleSaveCutoffRecord}
-                className="px-5 py-2 text-xs font-bold text-white bg-admin-primary hover:bg-indigo-700 rounded-xl shadow"
-              >
-                Save Branch Cutoffs
-              </button>
-            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
+
     </div>
   );
 };
