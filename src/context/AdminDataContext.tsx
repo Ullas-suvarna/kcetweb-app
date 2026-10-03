@@ -322,14 +322,13 @@ export const AdminDataProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   // Admin Login authentication
   const loginAdmin = async (password: string): Promise<boolean> => {
-    // Valid admin credentials check
     // Master admin password for KCET Gen Z console
-    const validPasswords = ['admin123', 'admin@kcet2026', 'ullas@kcet', 'kcetgenzadmin'];
+    const ADMIN_MASTER_PASSWORD = 'Ullas@17082006';
     
     // Simulate real auth delay
     await new Promise(r => setTimeout(r, 650));
 
-    if (validPasswords.includes(password.trim()) || password.trim().length >= 6) {
+    if (password === ADMIN_MASTER_PASSWORD) {
       setIsAuthenticated(true);
       localStorage.setItem('kcet_admin_auth', 'true');
       return true;
