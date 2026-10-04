@@ -105,7 +105,7 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
 
 
 
-      <div className="max-w-[1440px] w-full mx-auto px-3 sm:px-4 lg:px-6 flex items-center justify-between gap-3">
+      <div className="max-w-7xl w-full mx-auto px-3 sm:px-4 lg:px-6 flex items-center justify-between gap-3">
 
 
 

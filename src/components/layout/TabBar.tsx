@@ -190,7 +190,7 @@ export const TabBar: React.FC<TabBarProps> = ({ activeTab, onSelectTab }) => {
         onMouseLeave={handleMouseUpOrLeave}
         onWheel={handleWheel}
         onScroll={handleCheckScroll}
-        className={`max-w-[1440px] w-full mx-auto overflow-x-auto dark-scrollbar flex items-center px-3 sm:px-4 lg:px-6 py-2.5 gap-2 no-wrap transition-colors ${
+        className={`max-w-7xl w-full mx-auto overflow-x-auto dark-scrollbar flex items-center px-2 sm:px-4 py-1.5 gap-1.5 no-wrap transition-colors ${
           isMouseDown ? 'cursor-grabbing' : 'cursor-grab'
         }`}
         style={{ scrollBehavior: isMouseDown ? 'auto' : 'smooth' }}
@@ -205,7 +205,7 @@ export const TabBar: React.FC<TabBarProps> = ({ activeTab, onSelectTab }) => {
                   onSelectTab(tab.id);
                 }
               }}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-black whitespace-nowrap transition-all duration-150 shrink-0 pointer-events-auto ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-bold whitespace-nowrap transition-all duration-150 shrink-0 pointer-events-auto ${
                 tab.isStudentView
                   ? isActive 
                     ? 'bg-[#10B981] text-white shadow-md scale-[1.02]' 
@@ -217,7 +217,7 @@ export const TabBar: React.FC<TabBarProps> = ({ activeTab, onSelectTab }) => {
             >
               <span>{tab.name}</span>
               <span
-                className={`text-sm font-black px-2.5 py-0.5 rounded-full transition-all ${
+                className={`text-[11px] font-extrabold px-2 py-0.5 rounded-full transition-all ${
                   tab.isStudentView
                     ? 'bg-emerald-400 text-slate-950 shadow-sm'
                     : tab.isPendingYellow

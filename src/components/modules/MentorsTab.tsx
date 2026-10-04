@@ -1668,7 +1668,7 @@ export const MentorsTab: React.FC = () => {
                     <div className="p-3 bg-[#FEF9C3] rounded-2xl border border-[#FDE047] space-y-2">
                       <div className="flex items-center justify-between gap-2 flex-wrap">
                         <div className="flex items-center gap-2 text-sm font-bold text-[#854D0E]">
-                          <span>??</span>
+                          <span>💳</span>
                           <span>Payment UTR / Txn Ref: <strong className="font-mono text-[#713F12]">{booking.paymentRefNumber || 'Not provided'}</strong></span>
                         </div>
                         {(booking.receiptUrl?.trim() || booking.receiptImageUri?.trim()) ? (
@@ -1677,7 +1677,7 @@ export const MentorsTab: React.FC = () => {
                             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-black shadow-sm transition-all cursor-pointer shrink-0"
                           >
                             <Receipt className="w-3.5 h-3.5" />
-                            <span>?? View Receipt</span>
+                            <span>🧾 View Receipt</span>
                           </button>
                         ) : (
                           <span className="flex items-center gap-1 text-xs text-amber-600 font-semibold italic shrink-0">
@@ -1687,8 +1687,8 @@ export const MentorsTab: React.FC = () => {
                         )}
                       </div>
                       <div className="flex items-center gap-1.5 text-xs font-bold text-[#854D0E]">
-                        <span>??</span>
-                        <span>Amount Paid: <strong>?{booking.amountPaid || 50}</strong></span>
+                        <span>💰</span>
+                        <span>Amount Paid: <strong>₹{booking.amountPaid || 50}</strong></span>
                       </div>
                     </div>
 
