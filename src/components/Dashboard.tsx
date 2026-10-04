@@ -114,7 +114,7 @@ export const Dashboard: React.FC = () => {
 
       {/* Main Content Area */}
 
-      <main className="flex-1 w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 py-6 transition-all">
+      <main className="flex-1 w-full max-w-[1440px] mx-auto px-3 sm:px-4 lg:px-6 py-3 transition-all">
 
         {activeTab === 'questions' && <QuestionsTab />}
 

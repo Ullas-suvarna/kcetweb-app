@@ -15,10 +15,19 @@ import {
   Award,
   Calendar,
   Sparkles,
-  FileEdit
+  FileEdit,
+  Download,
+  Eye,
+  EyeOff,
+  Copy,
+  Check,
+  Printer,
+  KeyRound
 } from 'lucide-react';
 import { useAdminData } from '../../context/AdminDataContext';
 import { User, StudentTestResult } from '../../types';
+import { StudentDossierModal } from '../modals/StudentDossierModal';
+import { buildStudentDossierRecord } from '../../utils/studentDossierExporter';
 
 export const StudentsTab: React.FC = () => {
   const { 
@@ -60,6 +69,17 @@ export const StudentsTab: React.FC = () => {
   const [pinError, setPinError] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // ── Dossier / Credentials ──────────────────────────────────────────────────
+  const [isDossierOpen, setIsDossierOpen] = useState(false);
+  const [showAllPasswords, setShowAllPasswords] = useState(false);
+  const [copiedUid, setCopiedUid] = useState<string | null>(null);  // which card's credential was just copied
+
+  const handleCopyCredential = (uid: string, text: string) => {
+    navigator.clipboard.writeText(text).catch(() => {});
+    setCopiedUid(uid);
+    setTimeout(() => setCopiedUid(null), 2000);
+  };
+
   const totalCount = students.length;
   const premiumCount = students.filter(s => s && s.isPremium).length;
   const activeNowCount = students.filter(s => s && s.isActiveNow && !s.isBlocked && !s.isForceLoggedOut).length;
@@ -78,36 +98,50 @@ export const StudentsTab: React.FC = () => {
     setBlockReason('');
   };
 
-  // Edit Profile Save with Diff Generation
+  // Edit Profile Save — full field coverage matching Android schema
   const handleEditProfileSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingStudent) return;
 
     const diffs: string[] = [];
     if (originalStudent) {
-      if (originalStudent.name?.trim() !== editingStudent.name?.trim()) {
-        diffs.push(`• Name: '${originalStudent.name || 'None'}' → '${editingStudent.name}'`);
-      }
-      if ((originalStudent.kcetTargetRank || '').trim() !== (editingStudent.kcetTargetRank || '').trim()) {
-        diffs.push(`• Rank: '${originalStudent.kcetTargetRank || 'Under 1000'}' → '${editingStudent.kcetTargetRank}'`);
-      }
-      if ((originalStudent.targetStream || '').trim() !== (editingStudent.targetStream || '').trim()) {
-        diffs.push(`• Stream: '${originalStudent.targetStream || 'Engineering'}' → '${editingStudent.targetStream}'`);
-      }
-      if ((originalStudent.email || '').trim() !== (editingStudent.email || '').trim()) {
+      if ((originalStudent.name || '').trim() !== (editingStudent.name || '').trim())
+        diffs.push(`• Name: '${originalStudent.name}' → '${editingStudent.name}'`);
+      if ((originalStudent.email || '').trim() !== (editingStudent.email || '').trim())
         diffs.push(`• Email: '${originalStudent.email}' → '${editingStudent.email}'`);
-      }
+      if ((originalStudent.phone || '').trim() !== (editingStudent.phone || '').trim())
+        diffs.push(`• Phone: '${originalStudent.phone || 'None'}' → '${editingStudent.phone || 'None'}'`);
+      if ((originalStudent.studentId || '').trim() !== (editingStudent.studentId || '').trim())
+        diffs.push(`• Student ID: '${originalStudent.studentId || 'None'}' → '${editingStudent.studentId}'`);
+      if ((originalStudent.password || '').trim() !== (editingStudent.password || '').trim())
+        diffs.push(`• Password updated`);
+      if ((originalStudent.kcetTargetRank || '').trim() !== (editingStudent.kcetTargetRank || '').trim())
+        diffs.push(`• Rank: '${originalStudent.kcetTargetRank || 'Under 1000'}' → '${editingStudent.kcetTargetRank}'`);
+      if ((originalStudent.targetStream || '').trim() !== (editingStudent.targetStream || '').trim())
+        diffs.push(`• Stream: '${originalStudent.targetStream || 'Engineering'}' → '${editingStudent.targetStream}'`);
     }
 
     const now = new Date();
-    const formattedTime = now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) + ', ' + now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }).toLowerCase();
+    const formattedTime = now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) + ', '
+      + now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }).toLowerCase();
 
+    // Full payload — matches Android's updateUserProfileByAdmin schema exactly
     const updatePayload: Partial<User> & { uid: string } = {
-      uid: editingStudent.uid,
-      name: editingStudent.name,
-      email: editingStudent.email,
-      targetStream: editingStudent.targetStream,
-      kcetTargetRank: editingStudent.kcetTargetRank,
+      uid:               editingStudent.uid,
+      name:              editingStudent.name,
+      email:             editingStudent.email,
+      phone:             editingStudent.phone || '',
+      studentId:         editingStudent.studentId || editingStudent.formattedStudentId || '',
+      formattedStudentId: editingStudent.formattedStudentId || editingStudent.studentId || '',
+      password:          editingStudent.password || editingStudent.displayPassword || '',
+      displayPassword:   editingStudent.password || editingStudent.displayPassword || '',
+      kcetTargetRank:    editingStudent.kcetTargetRank,
+      targetStream:      editingStudent.targetStream,
+      isPremium:         editingStudent.isPremium,
+      isBlocked:         editingStudent.isBlocked,
+      blockReason:       editingStudent.blockReason || '',
+      isForceLoggedOut:  editingStudent.isForceLoggedOut,
+      signInMethod:      editingStudent.signInMethod || 'Email & Password',
     };
 
     if (diffs.length > 0) {
@@ -119,10 +153,11 @@ export const StudentsTab: React.FC = () => {
     }
 
     await updateStudent(updatePayload);
-    notifySuccess(`Profile record updated for ${editingStudent.name}!`, 'Profile Saved');
+    notifySuccess(`Profile record fully updated for ${editingStudent.name}!`, 'Profile Saved');
     setEditingStudent(null);
     setOriginalStudent(null);
   };
+
 
   // Send Direct Push Notification
   const handleSendDirectMsg = async (e: React.FormEvent) => {
@@ -172,12 +207,14 @@ export const StudentsTab: React.FC = () => {
   const handleScoreEditSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingResult) return;
-    const percentage = Number(((editingResult.score / editingResult.maxScore) * 100).toFixed(1));
+    const total = editingResult.maxScore || editingResult.totalQuestions || 0;
+    const percentage = total > 0 ? Number(((editingResult.score / total) * 100).toFixed(1)) : 0;
     await saveTestResult({
       ...editingResult,
+      maxScore: total,
       percentage
     });
-    notifySuccess(`Score updated for ${editingResult.testTitle}!`, 'Score Saved');
+    notifySuccess(`Score updated for ${editingResult.testTitle || editingResult.testName}!`, 'Score Saved');
     setEditingResult(null);
   };
 
@@ -270,6 +307,58 @@ export const StudentsTab: React.FC = () => {
         </div>
       </div>
 
+      {/* ── Dossier Action Banner ──────────────────────────────────────────── */}
+      <div className="flex flex-wrap items-center gap-3 p-4 rounded-2xl bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200">
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <KeyRound className="w-5 h-5 text-indigo-600 shrink-0" />
+          <div>
+            <span className="text-sm font-black text-indigo-900">Student Credentials & Dossier Directory</span>
+            <span className="block text-xs text-indigo-600 font-medium">Download complete credentials — IDs, passwords, academic info, and test performance</span>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {/* Reveal / Hide all passwords */}
+          <button
+            onClick={() => setShowAllPasswords(prev => !prev)}
+            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-black border transition-all cursor-pointer ${
+              showAllPasswords
+                ? 'bg-amber-100 text-amber-800 border-amber-300'
+                : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400'
+            }`}
+            title={showAllPasswords ? 'Hide all passwords' : 'Reveal all passwords on cards'}
+          >
+            {showAllPasswords ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+            <span>{showAllPasswords ? 'Hide Passwords' : 'Reveal All Passwords'}</span>
+          </button>
+
+          {/* Quick Print */}
+          <button
+            onClick={() => setIsDossierOpen(true)}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-black bg-[#4F46E5] hover:bg-[#4338CA] text-white shadow-sm transition-all cursor-pointer"
+          >
+            <Printer className="w-3.5 h-3.5" />
+            <span>🖨️ Quick Print PDF</span>
+          </button>
+
+          {/* Full Export Modal */}
+          <button
+            onClick={() => setIsDossierOpen(true)}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-all cursor-pointer"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>📥 Download Dossier</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Dossier Export Modal */}
+      <StudentDossierModal
+        isOpen={isDossierOpen}
+        onClose={() => setIsDossierOpen(false)}
+        records={students.map((s, idx) => buildStudentDossierRecord(s, idx, studentTestResults))}
+        onNotify={(msg, title) => notifySuccess(msg, title)}
+      />
+
       {/* ============================================================ */}
       {/* Student Cards Grid (Clear, Highly Readable Text & Metrics)   */}
       {/* ============================================================ */}
@@ -286,13 +375,25 @@ export const StudentsTab: React.FC = () => {
             const studentEmail = student.email || 'student@kcetgenz.com';
             const studentId = student.studentId || ('KCET-' + (studentUid.length > 6 ? studentUid.slice(-6) : '872995'));
 
-            const studentResults = studentTestResults.filter(r => 
-              r && (
-                (r.studentUid && (r.studentUid === studentUid || r.studentUid === studentId)) ||
-                (r.studentEmail && studentEmail && r.studentEmail.toLowerCase() === studentEmail.toLowerCase()) ||
-                (r.studentName && studentName && r.studentName.trim().toLowerCase() === studentName.trim().toLowerCase() && (r.studentUid === studentUid || !r.studentUid))
-              )
-            );
+            const studentResults = studentTestResults.filter(r => {
+              if (!r) return false;
+              const cleanUid      = studentUid.trim().toLowerCase();
+              const cleanEmail    = studentEmail.trim().toLowerCase();
+              const cleanId       = studentId.trim().toLowerCase();
+              const cleanName     = studentName.trim().toLowerCase();
+
+              const tUid   = (r.studentUid   || '').trim().toLowerCase();
+              const tEmail = (r.studentEmail || '').trim().toLowerCase();
+              const tId    = (r.studentId    || '').trim().toLowerCase();
+              const tName  = (r.studentName  || '').trim().toLowerCase();
+
+              const matchUid   = cleanUid   !== '' && (tUid === cleanUid   || tUid === cleanEmail || tUid === cleanId);
+              const matchEmail = cleanEmail !== '' && tEmail !== '' && tEmail === cleanEmail;
+              const matchId    = cleanId    !== '' && tId   !== '' && tId   === cleanId;
+              const matchName  = cleanName  !== '' && cleanName !== 'student' && tName !== '' && tName === cleanName
+                                 && (tUid === cleanUid || !r.studentUid);
+              return matchUid || matchEmail || matchId || matchName;
+            });
             const testCount = studentResults.length;
             const avgScorePct = testCount > 0 
               ? (studentResults.reduce((acc, r) => acc + (r.percentage || 0), 0) / testCount).toFixed(1) + '%'
@@ -420,7 +521,79 @@ export const StudentsTab: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* 3. PROFILE INFO UPDATED BANNER */}
+                  {/* 3. 🔐 Login Credentials Panel */}
+                  {(() => {
+                    const credId = student.formattedStudentId || studentId;
+                    const credLogin = studentEmail || student.phone || credId;
+                    const credPass  = student.password || student.displayPassword || 'kcet@user2026';
+                    const wasCopied = copiedUid === studentUid;
+                    return (
+                      <div className="rounded-2xl border border-dashed border-indigo-300 bg-indigo-50/50 p-3 space-y-2">
+                        <div className="flex items-center gap-1.5 text-xs font-black text-indigo-800 mb-1">
+                          <KeyRound className="w-3.5 h-3.5" />
+                          <span>Login Credentials &amp; Password</span>
+                        </div>
+
+                        {/* Student ID row */}
+                        <div className="flex items-center justify-between gap-2 bg-white rounded-xl px-3 py-2 border border-slate-200">
+                          <div className="min-w-0">
+                            <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wide">Student ID</span>
+                            <span className="font-mono font-black text-indigo-700 text-sm">{credId}</span>
+                          </div>
+                          <button
+                            onClick={() => handleCopyCredential(studentUid + '_id', credId)}
+                            className="shrink-0 p-1.5 rounded-lg hover:bg-indigo-100 text-indigo-500 transition-colors cursor-pointer"
+                            title="Copy Student ID"
+                          >
+                            {copiedUid === studentUid + '_id' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                          </button>
+                        </div>
+
+                        {/* Login Identifier row */}
+                        <div className="flex items-center justify-between gap-2 bg-white rounded-xl px-3 py-2 border border-slate-200">
+                          <div className="min-w-0 flex-1">
+                            <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wide">Login Identifier</span>
+                            <span className="font-medium text-slate-800 text-sm truncate block">{credLogin}</span>
+                          </div>
+                          <button
+                            onClick={() => handleCopyCredential(studentUid + '_login', credLogin)}
+                            className="shrink-0 p-1.5 rounded-lg hover:bg-indigo-100 text-indigo-500 transition-colors cursor-pointer"
+                            title="Copy Login"
+                          >
+                            {copiedUid === studentUid + '_login' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                          </button>
+                        </div>
+
+                        {/* Password row */}
+                        <div className="flex items-center justify-between gap-2 bg-white rounded-xl px-3 py-2 border border-red-100">
+                          <div className="min-w-0 flex-1">
+                            <span className="block text-[10px] font-bold text-red-400 uppercase tracking-wide">Password</span>
+                            <span className={`font-mono font-black text-sm ${showAllPasswords ? 'text-red-700' : 'text-slate-300 tracking-widest'}`}>
+                              {showAllPasswords ? credPass : '••••••••••'}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              onClick={() => setShowAllPasswords(prev => !prev)}
+                              className="p-1.5 rounded-lg hover:bg-red-50 text-slate-400 transition-colors cursor-pointer"
+                              title={showAllPasswords ? 'Hide password' : 'Reveal password'}
+                            >
+                              {showAllPasswords ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                            </button>
+                            <button
+                              onClick={() => handleCopyCredential(studentUid + '_pass', credPass)}
+                              className="p-1.5 rounded-lg hover:bg-red-50 text-red-400 transition-colors cursor-pointer"
+                              title="Copy password"
+                            >
+                              {copiedUid === studentUid + '_pass' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* 4. PROFILE INFO UPDATED BANNER */}
                   {hasUpdateNotice && (
                     <div className="moving-border-amber rounded-2xl p-3.5 space-y-1.5 text-sm">
                       <div className="flex items-center gap-2 text-[#854D0E] font-black text-sm sm:text-base">
@@ -672,65 +845,144 @@ export const StudentsTab: React.FC = () => {
       {/* Modal 1: Edit Profile */}
       {editingStudent && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <h3 className="font-black text-lg text-slate-900">Edit Student Record</h3>
-              <button onClick={() => setEditingStudent(null)} className="w-8 h-8 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center font-bold text-sm">✕</button>
+          <div className="bg-white rounded-3xl max-w-lg w-full shadow-2xl border border-slate-200 flex flex-col max-h-[90vh]">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-slate-100">
+              <div>
+                <h3 className="font-black text-lg text-slate-900 flex items-center gap-2">
+                  <span>✏️</span>
+                  <span>Edit Student Record</span>
+                </h3>
+                <p className="text-xs text-slate-500 font-medium mt-0.5">
+                  Syncs to Firestore: users • user_profiles • user_accounts • leaderboard
+                </p>
+              </div>
+              <button onClick={() => setEditingStudent(null)} className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center font-bold text-sm cursor-pointer">✕</button>
             </div>
 
-            <form onSubmit={handleEditProfileSave} className="space-y-3.5 text-sm">
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Full Name</label>
-                <input
-                  type="text"
-                  value={editingStudent.name}
-                  onChange={(e) => setEditingStudent({ ...editingStudent, name: e.target.value })}
-                  className="w-full p-3 bg-slate-50 border rounded-xl font-bold text-slate-900 text-sm"
-                  required
-                />
+            <form onSubmit={handleEditProfileSave} className="overflow-y-auto flex-1 px-6 py-4 space-y-4 text-sm">
+
+              {/* Section: Personal Info */}
+              <div className="space-y-3">
+                <p className="text-xs font-black text-indigo-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <span>👤</span> Personal Information
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="sm:col-span-2">
+                    <label className="block font-bold text-slate-700 mb-1">Full Name <span className="text-rose-500">*</span></label>
+                    <input
+                      type="text"
+                      value={editingStudent.name}
+                      onChange={(e) => setEditingStudent({ ...editingStudent, name: e.target.value })}
+                      className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Email <span className="text-rose-500">*</span></label>
+                    <input
+                      type="email"
+                      value={editingStudent.email}
+                      onChange={(e) => setEditingStudent({ ...editingStudent, email: e.target.value })}
+                      className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl font-medium text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Phone Number</label>
+                    <input
+                      type="tel"
+                      value={editingStudent.phone || ''}
+                      onChange={(e) => setEditingStudent({ ...editingStudent, phone: e.target.value })}
+                      placeholder="+91 98450 00000"
+                      className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl font-medium text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                    />
+                  </div>
+                </div>
               </div>
 
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Email</label>
-                <input
-                  type="email"
-                  value={editingStudent.email}
-                  onChange={(e) => setEditingStudent({ ...editingStudent, email: e.target.value })}
-                  className="w-full p-3 bg-slate-50 border rounded-xl font-medium text-slate-900 text-sm"
-                  required
-                />
+              {/* Section: Credentials */}
+              <div className="space-y-3">
+                <p className="text-xs font-black text-rose-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <span>🔐</span> Login Credentials
+                </p>
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 font-semibold">
+                  ⚠️ Changing the Student ID or Password here updates Firestore but does not reset Firebase Auth — the student will continue using their original Auth password unless reset via Firebase Console.
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Student ID (Formatted)</label>
+                    <input
+                      type="text"
+                      value={editingStudent.formattedStudentId || editingStudent.studentId || ''}
+                      onChange={(e) => setEditingStudent({ ...editingStudent, formattedStudentId: e.target.value, studentId: e.target.value })}
+                      placeholder="KCET-000001"
+                      className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl font-mono font-bold text-indigo-700 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Login Password</label>
+                    <input
+                      type="text"
+                      value={editingStudent.password || editingStudent.displayPassword || ''}
+                      onChange={(e) => setEditingStudent({ ...editingStudent, password: e.target.value, displayPassword: e.target.value })}
+                      placeholder="kcet@user2026"
+                      className="w-full p-2.5 bg-slate-50 border border-red-200 rounded-xl font-mono font-bold text-red-700 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
+                    />
+                  </div>
+                </div>
               </div>
 
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Target KCET Rank</label>
-                <input
-                  type="text"
-                  value={editingStudent.kcetTargetRank || ''}
-                  onChange={(e) => setEditingStudent({ ...editingStudent, kcetTargetRank: e.target.value })}
-                  placeholder="e.g. Under 1000"
-                  className="w-full p-3 bg-slate-50 border rounded-xl font-medium text-slate-900 text-sm"
-                />
+              {/* Section: KCET Academics */}
+              <div className="space-y-3">
+                <p className="text-xs font-black text-emerald-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <span>🎯</span> KCET Academics
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Target KCET Rank</label>
+                    <input
+                      type="text"
+                      value={editingStudent.kcetTargetRank || ''}
+                      onChange={(e) => setEditingStudent({ ...editingStudent, kcetTargetRank: e.target.value })}
+                      placeholder="e.g. Under 500"
+                      className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl font-medium text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Target Stream</label>
+                    <input
+                      type="text"
+                      value={editingStudent.targetStream || ''}
+                      onChange={(e) => setEditingStudent({ ...editingStudent, targetStream: e.target.value })}
+                      placeholder="e.g. Engineering (CS/IS)"
+                      className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl font-medium text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                    />
+                  </div>
+                </div>
               </div>
 
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Target Engineering Stream</label>
-                <input
-                  type="text"
-                  value={editingStudent.targetStream || ''}
-                  onChange={(e) => setEditingStudent({ ...editingStudent, targetStream: e.target.value })}
-                  placeholder="e.g. Engineering (B.E / B.Tech)"
-                  className="w-full p-3 bg-slate-50 border rounded-xl font-medium text-slate-900 text-sm"
-                />
-              </div>
-
-              <div className="pt-3 flex justify-end gap-3 border-t">
-                <button type="button" onClick={() => setEditingStudent(null)} className="px-5 py-2.5 rounded-xl bg-slate-100 font-bold text-slate-700 text-sm">Cancel</button>
-                <button type="submit" className="px-6 py-2.5 rounded-xl bg-[#4F46E5] text-white font-bold text-sm shadow-md">Save Changes</button>
+              {/* Action Buttons */}
+              <div className="pt-3 flex justify-end gap-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setEditingStudent(null)}
+                  className="px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 font-bold text-slate-700 text-sm cursor-pointer transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-2.5 rounded-xl bg-[#4F46E5] hover:bg-[#4338CA] text-white font-black text-sm shadow-md cursor-pointer transition-colors"
+                >
+                  💾 Save All Changes
+                </button>
               </div>
             </form>
           </div>
         </div>
       )}
+
 
       {/* Modal 2: Block Reason */}
       {blockingStudent && (
@@ -792,13 +1044,25 @@ export const StudentsTab: React.FC = () => {
         const studentId = viewingResultsStudent.studentId || ('KCET-' + (studentUid.length > 6 ? studentUid.slice(-6) : '896199'));
 
         const studentEmail = viewingResultsStudent.email || '';
-        const studentResults = studentTestResults.filter(r => 
-          r && (
-            (r.studentUid && (r.studentUid === studentUid || r.studentUid === studentId)) ||
-            (r.studentEmail && studentEmail && r.studentEmail.toLowerCase() === studentEmail.toLowerCase()) ||
-            (r.studentName && studentName && r.studentName.trim().toLowerCase() === studentName.trim().toLowerCase() && (r.studentUid === studentUid || !r.studentUid))
-          )
-        );
+        const studentResults = (() => {
+          const cleanUid   = studentUid.trim().toLowerCase();
+          const cleanEmail = studentEmail.trim().toLowerCase();
+          const cleanId    = studentId.trim().toLowerCase();
+          const cleanName  = studentName.trim().toLowerCase();
+          return studentTestResults.filter(r => {
+            if (!r) return false;
+            const tUid   = (r.studentUid   || '').trim().toLowerCase();
+            const tEmail = (r.studentEmail || '').trim().toLowerCase();
+            const tId    = (r.studentId    || '').trim().toLowerCase();
+            const tName  = (r.studentName  || '').trim().toLowerCase();
+            const matchUid   = cleanUid   !== '' && (tUid === cleanUid   || tUid === cleanEmail || tUid === cleanId);
+            const matchEmail = cleanEmail !== '' && tEmail !== '' && tEmail === cleanEmail;
+            const matchId    = cleanId    !== '' && tId   !== '' && tId   === cleanId;
+            const matchName  = cleanName  !== '' && cleanName !== 'student' && tName !== '' && tName === cleanName
+                               && (tUid === cleanUid || !r.studentUid);
+            return matchUid || matchEmail || matchId || matchName;
+          });
+        })();
 
         return (
           <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn">
@@ -823,7 +1087,15 @@ export const StudentsTab: React.FC = () => {
               ) : (
                 <div className="overflow-y-auto space-y-3.5 max-h-[52vh] pr-1">
                   {studentResults.map((r) => {
-                    const unanswered = r.unansweredCount ?? Math.max(0, r.maxScore - (r.correctCount + r.wrongCount));
+                    const total      = r.maxScore || r.totalQuestions || 0;
+                    const unanswered = r.unansweredCount != null
+                      ? r.unansweredCount
+                      : Math.max(0, total - ((r.correctCount || 0) + (r.wrongCount || 0)));
+                    const timeSecs   = r.timeTakenSeconds || 0;
+                    const timeStr    = timeSecs > 0
+                      ? `${Math.floor(timeSecs / 60)}m ${timeSecs % 60}s`
+                      : null;
+                    const dateStr    = r.attemptDate || (r.timestamp ? new Date(r.timestamp).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '');
                     return (
                       <div 
                         key={r.id} 
@@ -832,10 +1104,10 @@ export const StudentsTab: React.FC = () => {
                         {/* Top: Title and Score */}
                         <div className="flex items-center justify-between gap-2">
                           <span className="font-extrabold text-slate-900 text-base truncate">
-                            {r.testTitle}
+                            {r.testTitle || r.testName || 'Unnamed Test'}
                           </span>
                           <span className="font-extrabold text-[#15803D] text-base shrink-0 whitespace-nowrap">
-                            Score: {r.score}/{r.maxScore}
+                            Score: {r.score}{total > 0 ? `/${total}` : ''}
                           </span>
                         </div>
 
@@ -856,9 +1128,17 @@ export const StudentsTab: React.FC = () => {
                             </span>
                           </div>
                           <span className="font-black text-slate-900 text-base">
-                            {r.percentage.toFixed(1)}%
+                            {Number(r.percentage || 0).toFixed(1)}%
                           </span>
                         </div>
+
+                        {/* Date & Time Row */}
+                        {(dateStr || timeStr) && (
+                          <div className="flex items-center gap-3 text-xs font-semibold text-slate-400">
+                            {dateStr && <span>📅 {dateStr}</span>}
+                            {timeStr && <span>⏱ {timeStr}</span>}
+                          </div>
+                        )}
 
                         {/* Bottom: Edit and Delete actions */}
                         <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-100">
@@ -873,13 +1153,13 @@ export const StudentsTab: React.FC = () => {
                             onClick={async () => {
                               const ok = await requestConfirm({
                                 title: 'Delete Test Score Record',
-                                itemName: `${r.testTitle} (${r.score}/${r.maxScore})`,
+                                itemName: `${r.testTitle || r.testName || 'Test'} (${r.score}${total > 0 ? `/${total}` : ''})`,
                                 message: `Are you sure you want to remove this test attempt score from the student's record?`,
                                 isDestructive: true
                               });
                               if (ok) {
                                 await deleteTestResult(r.id);
-                                notifySuccess(`Score record for "${r.testTitle}" deleted.`, 'Score Deleted');
+                                notifySuccess(`Score record for "${r.testTitle || r.testName}" deleted.`, 'Score Deleted');
                               }
                             }}
                             className="text-[#DC2626] hover:text-[#B91C1C] p-1 transition-colors"
@@ -977,7 +1257,7 @@ export const StudentsTab: React.FC = () => {
                   <label className="block font-bold text-slate-700 mb-1">Unanswered</label>
                   <input
                     type="number"
-                    value={editingResult.unansweredCount ?? Math.max(0, editingResult.maxScore - (editingResult.score + editingResult.wrongCount))}
+                    value={editingResult.unansweredCount ?? Math.max(0, (editingResult.maxScore || editingResult.totalQuestions || 0) - (editingResult.score + editingResult.wrongCount))}
                     onChange={(e) => setEditingResult({ ...editingResult, unansweredCount: parseInt(e.target.value) || 0 })}
                     className="w-full p-2.5 bg-slate-50 border rounded-xl font-bold text-slate-600 text-sm"
                   />
@@ -987,8 +1267,8 @@ export const StudentsTab: React.FC = () => {
               <div className="p-3 bg-indigo-50 rounded-xl flex items-center justify-between text-indigo-900 font-bold">
                 <span>Calculated Percentage:</span>
                 <span className="text-base font-black">
-                  {editingResult.maxScore > 0 
-                    ? ((editingResult.score / editingResult.maxScore) * 100).toFixed(1) 
+                  {(editingResult.maxScore || editingResult.totalQuestions || 0) > 0 
+                    ? ((editingResult.score / (editingResult.maxScore || editingResult.totalQuestions || 1)) * 100).toFixed(1) 
                     : '0.0'}%
                 </span>
               </div>

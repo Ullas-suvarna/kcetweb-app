@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import {
   Question,
   TestSeriesSet,
@@ -40,6 +40,7 @@ import {
 import { ToastContainer, ToastItem, ToastType } from '../components/common/Toast';
 import { ConfirmModal, ConfirmDialogState } from '../components/common/ConfirmModal';
 import { db, rtdb, collection, doc, setDoc, deleteDoc, updateDoc, onSnapshot, writeBatch, ref, rtdbSet, onValue, ADMIN_IDENTIFIER } from '../services/firebase';
+import { deduplicateStudentProfiles } from '../utils/studentDedup';
 interface AdminDataContextType {
   // Auth
   isAuthenticated: boolean;
@@ -217,6 +218,11 @@ export const AdminDataProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   });
   const [branches, setBranches] = useState<EngineeringBranch[]>(INITIAL_BRANCHES);
   const [deletedStudents, setDeletedStudents] = useState<DeletedStudent[]>([]);
+  // Pending admin overrides — keyed by student uid.
+  // mergeAndEmit applies these so the UI never flickers back to stale data
+  // while onSnapshot is still propagating the Firestore write.
+  const pendingStudentOverrides = useRef<Map<string, Partial<User>>>(new Map());
+
   // Real-time Firestore snapshot synchronization
   useEffect(() => {
     let unsubs: (() => void)[] = [];
@@ -294,63 +300,114 @@ export const AdminDataProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           setNotifications(list);
         }
       }, () => {}));
-      // 10. Users / Students (Deduplicated, Real-Time Synchronized & Live Updates)
-      unsubs.push(onSnapshot(collection(db, 'users'), (snap) => {
-        if (!snap.empty) {
-          const userMap = new Map<string, User>();
+      // 10. Users / Students — Multi-source merge with full deduplication
+      // Combines /users + /user_accounts + /user_profiles (shared Android schema) through the
+      // 5-way clustering algorithm and filters /deleted_students in real time.
+      {
+        let rawUsers:    (Partial<User> & { docId?: string })[] = [];
+        let rawAccounts: (Partial<User> & { docId?: string })[] = [];
+        let rawProfiles: (Partial<User> & { docId?: string })[] = [];
+        let deletedSet:  Set<string> = new Set();
 
-          snap.forEach(d => {
-            const data = d.data() as any;
-            const docId = d.id;
-            const studentUid = (data.uid || docId).trim();
-            const studentEmail = (data.email || data.authEmail || '').toLowerCase().trim();
-            const studentKey = studentEmail || studentUid;
+        const mergeAndEmit = () => {
+          const combined = [...rawUsers, ...rawAccounts, ...rawProfiles];
+          let unique: User[] = deduplicateStudentProfiles(combined, deletedSet);
 
-            const existing = userMap.get(studentKey) || (studentUid ? userMap.get(studentUid) : undefined);
-
-            const incomingMillis = Number(data.lastUpdatedMillis || data.updatedAt || 0);
-            const existingMillis = Number(existing?.lastUpdatedMillis || 0);
-
-            // Merge fields: newer timestamp or UID doc takes precedence
-            let mergedUser: User = {
-              ...(existing || {}),
-              ...data,
-              uid: studentUid,
-              email: studentEmail || existing?.email || '',
-              name: (incomingMillis >= existingMillis && data.name) ? data.name : (existing?.name || data.name || 'Student'),
-              lastUpdatedMillis: Math.max(incomingMillis, existingMillis, Date.now())
-            };
-
-            // Detect if lastProfileUpdateNote has a stale target name compared to current name
-            if (mergedUser.lastProfileUpdateNote && mergedUser.name) {
-              const nameMatch = mergedUser.lastProfileUpdateNote.match(/• Name: '([^']+)' → '([^']+)'/);
-              if (nameMatch) {
-                const [_, fromName, toName] = nameMatch;
-                if (toName !== mergedUser.name) {
-                  // The name was recently updated in Android / Firestore to a newer name!
-                  mergedUser.lastProfileUpdateNote = `• Name: '${toName}' → '${mergedUser.name}'`;
-                  const dTime = new Date(mergedUser.lastUpdatedMillis || Date.now());
-                  mergedUser.lastProfileUpdateTime = dTime.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) + ', ' + dTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }).toLowerCase();
-                }
+          // Apply any pending admin overrides so the UI reflects edits instantly.
+          // The override is cleared once Firestore confirms the write via onSnapshot.
+          if (pendingStudentOverrides.current.size > 0) {
+            unique = unique.map(s => {
+              const override = pendingStudentOverrides.current.get(s.uid);
+              if (!override) return s;
+              // Once Firestore data matches the override, clear it
+              const overrideKeys = Object.keys(override) as (keyof User)[];
+              const firestoreHasUpdate = overrideKeys.every(k =>
+                k === 'lastUpdatedMillis' || (s as any)[k] === (override as any)[k]
+              );
+              if (firestoreHasUpdate) {
+                pendingStudentOverrides.current.delete(s.uid);
               }
-            }
+              return { ...s, ...override };
+            });
+          }
 
-            userMap.set(studentKey, mergedUser);
-            if (studentUid) userMap.set(studentUid, mergedUser);
-          });
+          setStudents(unique);
+        };
 
-          // Unique deduplicated list of students
-          const uniqueStudents = Array.from(new Set(userMap.values()));
-          setStudents(uniqueStudents);
-        }
-      }, (error) => {
-        console.warn('Users snapshot listener notice:', error);
-      }));
+        // 10a. /users collection
+        unsubs.push(onSnapshot(collection(db, 'users'), (snap) => {
+          rawUsers = snap.docs.map(d => ({ docId: d.id, ...(d.data() as any) }));
+          mergeAndEmit();
+        }, (err) => { console.warn('users onSnapshot:', err); }));
+
+        // 10b. /user_accounts (sanitized-email-keyed docs written by Android)
+        unsubs.push(onSnapshot(collection(db, 'user_accounts'), (snap) => {
+          rawAccounts = snap.docs.map(d => ({ docId: d.id, ...(d.data() as any) }));
+          mergeAndEmit();
+        }, () => {}));
+
+        // 10c. /user_profiles (shared profile & credentials collection written by Android App)
+        unsubs.push(onSnapshot(collection(db, 'user_profiles'), (snap) => {
+          rawProfiles = snap.docs.map(d => ({ docId: d.id, ...(d.data() as any) }));
+          mergeAndEmit();
+        }, () => {}));
+
+        // 10d. /deleted_students — reactive filter + state sync
+        unsubs.push(onSnapshot(collection(db, 'deleted_students'), (snap) => {
+          deletedSet = new Set(snap.docs.flatMap(d => {
+            const data = d.data() as any;
+            const entries = [d.id.trim()];
+            if (data.uid)   entries.push((data.uid   as string).trim());
+            if (data.email) entries.push((data.email as string).trim().toLowerCase());
+            return entries;
+          }));
+          setDeletedStudents(snap.docs.map(d => d.data() as DeletedStudent));
+          mergeAndEmit();
+        }, () => {}));
+      }
       // 11. Test Results
       unsubs.push(onSnapshot(collection(db, 'test_results'), (snap) => {
         if (!snap.empty) {
-          const list: StudentTestResult[] = [];
-          snap.forEach(d => list.push({ id: d.id, ...d.data() } as StudentTestResult));
+          const list: StudentTestResult[] = snap.docs.map(d => {
+            const data = d.data();
+            // Normalize Android field names → web field names so the filter
+            // and display logic works regardless of which platform wrote the doc.
+            return {
+              id: d.id,
+              // Identity — prefer Android fields, fall back to web fields
+              studentUid:   data.userId      || data.studentUid   || '',
+              studentName:  data.userName    || data.studentName  || '',
+              studentEmail: (data.userEmail  || data.studentEmail || '').toLowerCase(),
+              studentId:    data.studentId   || '',
+              // Test metadata
+              testSetId:    data.attemptId   || data.testSetId    || d.id,
+              testTitle:    data.testName    || data.testTitle    || 'Unnamed Test',
+              // Scores
+              score:        Number(data.score        || 0),
+              maxScore:     Number(data.totalQuestions || data.maxScore || 0),
+              correctCount: Number(data.correctCount || 0),
+              wrongCount:   Number(data.wrongCount   || 0),
+              unansweredCount: Number(data.unansweredCount ?? 0),
+              percentage:   Number(data.percentage   || 0),
+              timeTakenSeconds: Number(data.timeTakenSeconds || 0),
+              // Timestamp — convert epoch ms to readable date string
+              timestamp:    data.timestamp || 0,
+              attemptDate:  data.attemptDate || (
+                data.timestamp
+                  ? new Date(data.timestamp).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+                  : ''
+              ),
+              // Keep raw Android fields too (for reference)
+              userId:    data.userId,
+              userName:  data.userName,
+              userEmail: data.userEmail,
+              testName:  data.testName,
+              totalQuestions: data.totalQuestions,
+              attemptId: data.attemptId,
+            } as StudentTestResult;
+          });
+          // Sort newest first
+          list.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
           setStudentTestResults(list);
         }
       }, () => {}));
@@ -421,14 +478,7 @@ export const AdminDataProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           setBranches(list);
         }
       }, () => {}));
-      // 17. Deleted Students
-      unsubs.push(onSnapshot(collection(db, 'deleted_students'), (snap) => {
-        if (!snap.empty) {
-          const list: DeletedStudent[] = [];
-          snap.forEach(d => list.push({ ...d.data() } as DeletedStudent));
-          setDeletedStudents(list);
-        }
-      }, () => {}));
+      // Note: deleted_students is now handled inside the three-source student merge block (10c) above.
       // 18. Realtime Database /user_premium (Instant socket listener ~50ms)
       try {
         const premiumRef = ref(rtdb, 'user_premium');
@@ -737,35 +787,41 @@ export const AdminDataProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       console.warn('Deleted rank tier locally', e);
     }
   };
-  // 7. Announcements & Notifications
+  // 7. Announcements & Notifications — Dual-Write Pipeline
   const sendBroadcast = async (notif: Partial<Notification>, makeBanner = false) => {
-    const notifId = notif.id || `notif-${Date.now()}`;
-    const newNotif: Notification = {
-      id: notifId,
-      title: notif.title || 'Platform Notice',
-      message: notif.message || '',
-      timestamp: 'Just now',
-      type: notif.type || 'ANNOUNCEMENT',
-      isRead: false,
-      actionType: notif.actionType || 'NONE',
-      targetUserId: notif.targetUserId,
-      targetUserEmail: notif.targetUserEmail,
-      createdAtMillis: Date.now()
-    };
-    setNotifications(prev => [newNotif, ...prev]);
-    try {
-      await setDoc(doc(db, 'notifications', notifId), newNotif);
-    } catch (e) {
-      console.warn('Saved notification locally', e);
-    }
+    const createdAtMillis = Date.now();
+
+    // Determine targeting — CRITICAL: Firestore drops undefined fields, so we must
+    // always write explicit string values. The Android app relies on these exact
+    // values to decide who receives the notification:
+    //   • Broadcast  → targetUserId = "ALL",  targetUserEmail = ""
+    //   • Targeted   → targetUserId = student UID, targetUserEmail = student email
+    const isTargeted = !!(notif.targetUserId && notif.targetUserId.trim() !== '' && notif.targetUserId.toUpperCase() !== 'ALL');
+    const resolvedTargetUserId    = isTargeted ? notif.targetUserId!.trim()                       : 'ALL';
+    const resolvedTargetUserEmail = isTargeted ? (notif.targetUserEmail || '').trim().toLowerCase() : '';
+
+    // Human-readable timestamp (e.g. "04 Oct, 03:30 PM")
+    const humanTimestamp = new Intl.DateTimeFormat('en-IN', {
+      day: '2-digit', month: 'short',
+      hour: '2-digit', minute: '2-digit', hour12: true
+    }).format(new Date(createdAtMillis));
+
     if (makeBanner) {
-      const ancId = `anc-${Date.now()}`;
+      // ── DUAL-WRITE: Announcement banner + linked broadcast notification ──
+      // IDs are intentionally linked: ann_<ts> ↔ notif_ann_<ts> for clean deletion.
+      const ancId   = `ann_${createdAtMillis}`;
+      const notifId = `notif_${ancId}`;
+
+      const isUrgent = notif.type === 'EXAM_ALERT';
+      const rawTitle = (notif.title || 'Important Announcement').trim();
+
+      // 1. Write /announcements — populates student Home Screen banner
       const newAnc: Announcement = {
         id: ancId,
-        title: notif.title || 'Important Announcement',
-        date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+        title: rawTitle,
+        date: humanTimestamp,
         message: notif.message || '',
-        isImportant: true
+        isImportant: isUrgent
       };
       setAnnouncements(prev => [newAnc, ...prev]);
       try {
@@ -773,12 +829,68 @@ export const AdminDataProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       } catch (e) {
         console.warn('Saved announcement banner locally', e);
       }
+
+      // 2. Write /notifications — triggers bell badge on student devices
+      // Urgent: "🚨 IMPORTANT: <title>", Standard: "📢 <title>"
+      const notifTitle = isUrgent ? `🚨 IMPORTANT: ${rawTitle}` : `📢 ${rawTitle}`;
+      const newNotif: Notification = {
+        id: notifId,
+        title: notifTitle,
+        message: notif.message || '',
+        timestamp: humanTimestamp,
+        type: isUrgent ? 'EXAM_ALERT' : 'ANNOUNCEMENT',
+        isRead: false,
+        actionType: 'NONE',   // Students tap the announcement card on Home; NONE keeps bell feed clean
+        targetUserId: 'ALL',
+        targetUserEmail: '',
+        createdAtMillis
+      };
+      setNotifications(prev => [newNotif, ...prev]);
+      try {
+        await setDoc(doc(db, 'notifications', notifId), newNotif);
+      } catch (e) {
+        console.warn('Saved announcement notification locally', e);
+      }
+
+    } else {
+      // ── SINGLE-WRITE: Direct push notification (targeted or global) ──
+      const notifId = notif.id || `notif-${createdAtMillis}`;
+      const newNotif: Notification = {
+        id: notifId,
+        title: notif.title || 'Platform Notice',
+        message: notif.message || '',
+        timestamp: humanTimestamp,
+        type: notif.type || 'ANNOUNCEMENT',
+        isRead: false,
+        actionType: notif.actionType || 'NONE',
+        targetUserId: resolvedTargetUserId,
+        targetUserEmail: resolvedTargetUserEmail,
+        createdAtMillis
+      };
+      setNotifications(prev => [newNotif, ...prev]);
+      try {
+        await setDoc(doc(db, 'notifications', notifId), newNotif);
+      } catch (e) {
+        console.warn('Saved notification locally', e);
+      }
     }
   };
   const deleteAnnouncement = async (id: string) => {
     setAnnouncements(prev => prev.filter(a => a.id !== id));
+    // Also remove the linked notification (notif_ann_<ts> pattern) from state
+    const linkedNotifId = `notif_${id}`;
+    setNotifications(prev => prev.filter(n => n.id !== linkedNotifId));
     try {
       await deleteDoc(doc(db, 'announcements', id));
+      // Delete linked notification from Firestore
+      try { await deleteDoc(doc(db, 'notifications', linkedNotifId)); } catch (_) {}
+      // Register in globally_deleted_notifications so Android removes it from all devices
+      try {
+        await setDoc(doc(db, 'globally_deleted_notifications', linkedNotifId), {
+          id: linkedNotifId, deletedBy: 'admin', deletedAtMillis: Date.now()
+        });
+        await rtdbSet(ref(rtdb, `globally_deleted_notifications/${linkedNotifId}`), true);
+      } catch (_) {}
     } catch (e) {
       console.warn('Deleted announcement locally', e);
     }
@@ -795,40 +907,93 @@ export const AdminDataProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   };
   // 8. Students Moderation
   const updateStudent = async (student: Partial<User> & { uid: string }) => {
-    let targetStudent: User | undefined;
+    const nowMillis = Date.now();
+
+    // ── Step 1: Look up current student (needed for email fallback + name diff) ──
+    const currentStudent = students.find(s => s.uid === student.uid);
+    const previousName   = currentStudent?.name;
+    const effectiveEmail = (student.email || currentStudent?.email || '').toLowerCase().trim();
+
+    // ── Step 2: Build full Firestore payload (Android schema) ─────────────────
+    const payload: Record<string, unknown> = {
+      ...student,
+      lastUpdatedMillis: nowMillis,
+    };
+    if (student.studentId)        payload.formattedStudentId = student.studentId;
+    if (student.formattedStudentId) payload.studentId = student.formattedStudentId;
+
+    // ── Step 3: Register override FIRST — mergeAndEmit will apply it immediately
+    //           This prevents onSnapshot from ever reverting the UI to stale data.
+    pendingStudentOverrides.current.set(student.uid, {
+      ...(payload as Partial<User>),
+      lastUpdatedMillis: nowMillis,
+    });
+
+    // ── Step 4: Optimistic local state update (instant) ──────────────────────
     setStudents(prev => {
       const idx = prev.findIndex(s => s.uid === student.uid);
       if (idx >= 0) {
         const u = [...prev];
-        targetStudent = { ...u[idx], ...student, lastUpdatedMillis: Date.now() };
-        u[idx] = targetStudent;
+        u[idx] = { ...u[idx], ...(payload as Partial<User>), lastUpdatedMillis: nowMillis };
         return u;
       }
       return prev;
     });
-    try {
-      const nowMillis = Date.now();
-      await setDoc(doc(db, 'users', student.uid), {
-        ...student,
-        lastUpdatedMillis: nowMillis
-      }, { merge: true });
 
-      if (targetStudent && targetStudent.email) {
-        const sanitizedEmailDoc = targetStudent.email.replace(/[@.]/g, '_');
-        await setDoc(doc(db, 'users', sanitizedEmailDoc), {
-          ...student,
-          lastUpdatedMillis: nowMillis
-        }, { merge: true });
+    // ── Step 5: Fire all Firestore writes CONCURRENTLY ────────────────────────
+    //           (Promise.all → only 1-2 onSnapshot emissions instead of 4+)
+    const sanitizedEmailDoc = effectiveEmail.replace(/[@.]/g, '_');
+    const androidEmailKey   = effectiveEmail.replace('.', '_').replace('@', '_');
 
-        await setDoc(doc(db, 'user_accounts', targetStudent.email.toLowerCase().trim()), {
-          ...student,
-          lastUpdatedMillis: nowMillis
-        }, { merge: true });
+    const writes: Promise<void>[] = [
+      setDoc(doc(db, 'users',        student.uid), payload, { merge: true }),
+      setDoc(doc(db, 'user_profiles', student.uid), payload, { merge: true }),
+    ];
+    if (effectiveEmail) {
+      writes.push(setDoc(doc(db, 'users',         sanitizedEmailDoc), payload, { merge: true }));
+      writes.push(setDoc(doc(db, 'user_accounts', effectiveEmail),    payload, { merge: true }));
+      if (androidEmailKey !== sanitizedEmailDoc && androidEmailKey !== effectiveEmail) {
+        writes.push(setDoc(doc(db, 'user_accounts', androidEmailKey), payload, { merge: true }));
       }
-    } catch (e) {
-      console.warn('Updated student locally', e);
     }
+
+    // Catch write errors without blocking the UI
+    Promise.all(writes).then(async () => {
+      // ── Step 6: Background — leaderboard + test_results name sync ────────
+      const newName = (student.name || currentStudent?.name || '').trim();
+      if (newName && previousName && newName !== previousName.trim()) {
+        try {
+          await setDoc(doc(db, 'leaderboard', student.uid), {
+            name: newName,
+            lastUpdatedMillis: nowMillis,
+          }, { merge: true });
+        } catch (_) {}
+
+        try {
+          const { query, where, getDocs } = await import('firebase/firestore');
+          const q = query(collection(db, 'test_results'), where('userId', '==', student.uid));
+          const snap = await getDocs(q);
+          if (!snap.empty) {
+            const batchWrite = writeBatch(db);
+            snap.docs.forEach(d => {
+              batchWrite.set(d.ref, { userName: newName, studentName: newName }, { merge: true });
+            });
+            await batchWrite.commit();
+          }
+        } catch (_) {}
+      }
+
+      // Safety: clear override after 5 s even if Firestore auto-clear didn't trigger
+      setTimeout(() => {
+        pendingStudentOverrides.current.delete(student.uid);
+      }, 5000);
+    }).catch(e => {
+      console.warn('updateStudent Firebase sync error:', e);
+      // On failure, clear the override so the UI reverts to real Firestore state
+      pendingStudentOverrides.current.delete(student.uid);
+    });
   };
+
   const togglePremium = async (uid: string, current: boolean, studentEmail?: string, studentId?: string) => {
     const newStatus = !current;
     const now = Date.now();
@@ -876,6 +1041,7 @@ export const AdminDataProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
       if (uid) {
         batch.set(doc(db, 'users', uid), updatePayload, { merge: true });
+        batch.set(doc(db, 'user_profiles', uid), updatePayload, { merge: true });
       }
       if (emailDocId && emailDocId !== uid) {
         batch.set(doc(db, 'users', emailDocId), updatePayload, { merge: true });
@@ -965,6 +1131,7 @@ export const AdminDataProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     try {
       const batch = writeBatch(db);
       if (uid) batch.delete(doc(db, 'users', uid));
+      if (uid) batch.delete(doc(db, 'user_profiles', uid));
       if (sanitizedEmailDoc && sanitizedEmailDoc !== uid) batch.delete(doc(db, 'users', sanitizedEmailDoc));
       if (effectiveEmail) batch.delete(doc(db, 'user_accounts', effectiveEmail));
       if (uid) batch.delete(doc(db, 'leaderboard', uid));
@@ -981,13 +1148,19 @@ export const AdminDataProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       console.warn('Firestore multi-doc delete notice:', e);
     }
 
-    // 2. Clean test_results for student
+    // 2. Clean test_results for student — match both web (studentUid/studentEmail) and Android (userId/userEmail) field names
     try {
-      const resultsToDelete = studentTestResults.filter(r => r.studentUid === uid || (effectiveEmail && r.studentEmail === effectiveEmail));
+      const resultsToDelete = studentTestResults.filter(r =>
+        r.studentUid === uid || r.userId === uid ||
+        (effectiveEmail && (r.studentEmail === effectiveEmail || r.userEmail === effectiveEmail))
+      );
       for (const res of resultsToDelete) {
         await deleteDoc(doc(db, 'test_results', res.id));
       }
-      setStudentTestResults(prev => prev.filter(r => r.studentUid !== uid && (effectiveEmail ? r.studentEmail !== effectiveEmail : true)));
+      setStudentTestResults(prev => prev.filter(r =>
+        r.studentUid !== uid && r.userId !== uid &&
+        (effectiveEmail ? (r.studentEmail !== effectiveEmail && r.userEmail !== effectiveEmail) : true)
+      ));
     } catch (e) {}
 
     // 3. Realtime Database Cleanup

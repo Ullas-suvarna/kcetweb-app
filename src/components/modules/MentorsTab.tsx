@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 
 
 
@@ -82,10 +82,12 @@ import {
 
 
 
-  Search
-
-
-
+  Search,
+  Receipt,
+  ZoomIn,
+  Download,
+  Copy,
+  Check
 } from 'lucide-react';
 
 
@@ -147,6 +149,10 @@ export const MentorsTab: React.FC = () => {
 
 
   const [adminNotesMap, setAdminNotesMap] = useState<Record<string, string>>({});
+  // Receipt viewer lightbox
+  const [viewingReceiptBooking, setViewingReceiptBooking] = useState<SeniorChatBooking | null>(null);
+  const [receiptCopied, setReceiptCopied] = useState(false);
+
 
 
 
@@ -1658,29 +1664,33 @@ export const MentorsTab: React.FC = () => {
 
 
 
-                    {/* Payment Banner (Light Yellow Container) */}
-
-
-
-                    <div className="p-3 bg-[#FEF9C3] rounded-2xl border border-[#FDE047] text-sm font-bold text-[#854D0E] flex items-center gap-2">
-
-
-
-                      <span>💳</span>
-
-
-
-                      <span>Payment UTR / Txn Ref: <strong className="font-mono text-[#713F12]">{booking.paymentRefNumber || 'UPI/610294829103/KART'}</strong></span>
-
-
-
+                    {/* Payment UTR + Receipt Viewer Banner */}
+                    <div className="p-3 bg-[#FEF9C3] rounded-2xl border border-[#FDE047] space-y-2">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <div className="flex items-center gap-2 text-sm font-bold text-[#854D0E]">
+                          <span>??</span>
+                          <span>Payment UTR / Txn Ref: <strong className="font-mono text-[#713F12]">{booking.paymentRefNumber || 'Not provided'}</strong></span>
+                        </div>
+                        {(booking.receiptUrl?.trim() || booking.receiptImageUri?.trim()) ? (
+                          <button
+                            onClick={() => setViewingReceiptBooking(booking)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-black shadow-sm transition-all cursor-pointer shrink-0"
+                          >
+                            <Receipt className="w-3.5 h-3.5" />
+                            <span>?? View Receipt</span>
+                          </button>
+                        ) : (
+                          <span className="flex items-center gap-1 text-xs text-amber-600 font-semibold italic shrink-0">
+                            <Receipt className="w-3.5 h-3.5 opacity-50" />
+                            <span>Receipt not uploaded</span>
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-[#854D0E]">
+                        <span>??</span>
+                        <span>Amount Paid: <strong>?{booking.amountPaid || 50}</strong></span>
+                      </div>
                     </div>
-
-
-
-
-
-
 
                     {/* Assigned Mentor Card (Light Green Container) */}
 
@@ -3226,7 +3236,146 @@ export const MentorsTab: React.FC = () => {
 
 
 
-    </div>
+
+      {/* ── Receipt Lightbox Modal ─────────────────────────────────────────── */}
+      {viewingReceiptBooking && (() => {
+        const receiptSrc = viewingReceiptBooking.receiptUrl || viewingReceiptBooking.receiptImageUri || '';
+        // Determine what kind of receipt data we have
+        const isBase64    = receiptSrc.startsWith('data:');          // Base64 data URI from Android
+        const isHttpUrl   = receiptSrc.startsWith('http');            // Firebase Storage or CDN URL
+        const isContentUri = receiptSrc.startsWith('content://');     // Local Android device URI
+        const hasReceipt  = isBase64 || isHttpUrl || isContentUri;
+
+        return (
+          <div
+            className="fixed inset-0 z-[100] bg-black/85 backdrop-blur-md flex items-center justify-center p-4"
+            onClick={() => setViewingReceiptBooking(null)}
+          >
+            <div
+              className="bg-white rounded-3xl max-w-lg w-full shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+              onClick={e => e.stopPropagation()}
+            >
+              {/* ── Header */}
+              <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 shrink-0">
+                <div className="min-w-0">
+                  <h3 className="font-black text-base text-slate-900 flex items-center gap-2">
+                    <Receipt className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span className="truncate">Payment Receipt — {viewingReceiptBooking.userName}</span>
+                  </h3>
+                  <p className="text-xs text-slate-500 font-medium mt-0.5 truncate">
+                    <span className="font-mono">{viewingReceiptBooking.bookingId}</span>
+                    {' · '}UTR: <span className="font-mono font-black text-amber-700">{viewingReceiptBooking.paymentRefNumber || '—'}</span>
+                    {' · '}₹{viewingReceiptBooking.amountPaid || 50}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setViewingReceiptBooking(null)}
+                  className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center font-bold text-sm cursor-pointer transition-colors shrink-0 ml-2"
+                >✕</button>
+              </div>
+
+              {/* ── Receipt Image Area */}
+              <div className="flex-1 overflow-y-auto p-4">
+                {(isBase64 || isHttpUrl) ? (
+                  /* ✅ Base64 data URI or HTTP URL — renders directly in browser */
+                  <div className="bg-slate-50 rounded-2xl overflow-hidden border border-slate-200">
+                    <img
+                      src={receiptSrc}
+                      alt="Payment Receipt uploaded by student"
+                      className="w-full max-h-[60vh] object-contain rounded-2xl"
+                      onError={e => {
+                        const img = e.target as HTMLImageElement;
+                        img.style.display = 'none';
+                        const fallback = img.parentElement?.querySelector('.receipt-fallback') as HTMLElement;
+                        if (fallback) fallback.style.display = 'block';
+                      }}
+                    />
+                    <div className="receipt-fallback hidden text-center py-8 text-sm text-slate-500 space-y-2">
+                      <Receipt className="w-10 h-10 mx-auto text-slate-300" />
+                      <p className="font-semibold">Image could not be loaded</p>
+                      <p className="text-xs text-slate-400">The data may be corrupted or the URL has expired.</p>
+                    </div>
+                  </div>
+                ) : isContentUri ? (
+                  /* ⚠️ Local Android device URI — can't load in browser */
+                  <div className="text-center py-10 space-y-3 bg-amber-50 rounded-2xl border border-amber-200 px-6">
+                    <Receipt className="w-14 h-14 mx-auto text-amber-400" />
+                    <p className="text-sm font-black text-amber-800">Local Android Device URI</p>
+                    <p className="text-xs font-mono text-slate-600 bg-white rounded-xl p-3 break-all border border-amber-200">{receiptSrc}</p>
+                    <p className="text-xs text-amber-700 font-semibold">
+                      This URI points to a file on the student's device and cannot be displayed in a web browser.
+                      The student needs to update their app — newer versions upload to Firebase Storage and share a public URL.
+                    </p>
+                  </div>
+                ) : (
+                  /* ❌ No receipt at all */
+                  <div className="text-center py-10 space-y-3">
+                    <Receipt className="w-14 h-14 mx-auto text-slate-300" />
+                    <p className="text-sm font-black text-slate-500">No Receipt Image Uploaded</p>
+                    <p className="text-xs text-slate-400">The student submitted only a UTR reference number without attaching a screenshot.</p>
+                  </div>
+                )}
+              </div>
+
+              {/* ── Action Bar */}
+              <div className="px-4 py-3 border-t border-slate-100 flex items-center gap-2 flex-wrap shrink-0 bg-slate-50/70">
+                {/* Student Info chip */}
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 bg-white rounded-xl px-3 py-1.5 border border-slate-200 mr-auto">
+                  <span>📅</span>
+                  <span>{viewingReceiptBooking.selectedDate} · {viewingReceiptBooking.selectedTime}</span>
+                </div>
+
+                {/* Copy UTR */}
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(viewingReceiptBooking.paymentRefNumber || '');
+                    setReceiptCopied(true);
+                    setTimeout(() => setReceiptCopied(false), 2000);
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs font-black border border-amber-200 cursor-pointer transition-colors"
+                >
+                  {receiptCopied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{receiptCopied ? 'Copied!' : 'Copy UTR'}</span>
+                </button>
+
+                {/* Download — only for HTTP URLs */}
+                {isHttpUrl && (
+                  <a
+                    href={receiptSrc}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-800 text-xs font-black border border-indigo-200 cursor-pointer transition-colors"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Download</span>
+                  </a>
+                )}
+
+                {/* Save Base64 as file */}
+                {isBase64 && (
+                  <button
+                    onClick={() => {
+                      const a = document.createElement('a');
+                      a.href = receiptSrc;
+                      a.download = `receipt_${viewingReceiptBooking.bookingId}.jpg`;
+                      a.click();
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-black border border-emerald-200 cursor-pointer transition-colors"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Save Receipt</span>
+                  </button>
+                )}
+
+                <button
+                  onClick={() => setViewingReceiptBooking(null)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-black cursor-pointer transition-colors"
+                >✕ Close</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}    </div>
 
 
 

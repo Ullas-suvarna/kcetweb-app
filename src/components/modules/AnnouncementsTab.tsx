@@ -171,6 +171,7 @@ export const AnnouncementsTab: React.FC = () => {
 
 
   const [studentSearchQuery, setStudentSearchQuery] = useState<string>('');
+  const [studentDropdownOpen, setStudentDropdownOpen] = useState(false);
 
 
 
@@ -1195,215 +1196,132 @@ export const AnnouncementsTab: React.FC = () => {
 
 
 
-          {/* Specific Student Selector Dropdown (Shown when Specific Student is selected) */}
 
-
-
+          {/* Specific Student Selector — Custom Searchable Dropdown */}
           {targetMode === 'specific' && (
-
-
-
             <div className="p-4 bg-indigo-50/70 border-2 border-indigo-200 rounded-2xl space-y-3 animate-fadeIn">
 
+              {/* Label */}
+              <label className="text-sm font-black text-indigo-950 flex items-center gap-1.5">
+                <UserIcon className="w-4 h-4 text-indigo-600" />
+                <span>Select Target Student ({students.length} Registered)</span>
+              </label>
 
-
-              <div className="flex items-center justify-between">
-
-
-
-                <label className="text-sm font-black text-indigo-950 flex items-center gap-1.5">
-
-
-
-                  <UserIcon className="w-4 h-4 text-indigo-600" />
-
-
-
-                  <span>Select Target Student from Database ({students.length} Registered)</span>
-
-
-
-                </label>
-
-
-
-              </div>
-
-
-
-
-
-
-
-              {/* Search input to quickly filter students */}
-
-
-
+              {/* Custom Dropdown */}
               <div className="relative">
 
-
-
-                <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
-
-
-
-                <input
-
-
-
-                  type="text"
-
-
-
-                  value={studentSearchQuery}
-
-
-
-                  onChange={(e) => setStudentSearchQuery(e.target.value)}
-
-
-
-                  placeholder="Type name, email, or Student ID to search..."
-
-
-
-                  className="w-full pl-9 pr-3 py-2 bg-white border border-indigo-300 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
-
-
-
-                />
-
-
-
-              </div>
-
-
-
-
-
-
-
-              {/* Student Select Dropdown */}
-
-
-
-              <div className="relative">
-
-
-
-                <select
-
-
-
-                  value={selectedStudentUid}
-
-
-
-                  onChange={(e) => setSelectedStudentUid(e.target.value)}
-
-
-
-                  className="w-full h-12 px-3 bg-white border border-indigo-400 rounded-xl text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-
-
-
-                  required
-
-
-
+                {/* Trigger button */}
+                <button
+                  type="button"
+                  onClick={() => { setStudentDropdownOpen(prev => !prev); setStudentSearchQuery(''); }}
+                  className={`w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl border text-sm font-semibold text-left transition-all bg-white ${selectedStudent ? 'border-indigo-400 text-slate-900' : 'border-indigo-300 text-slate-400'} focus:outline-none focus:ring-2 focus:ring-indigo-500`}
                 >
+                  {selectedStudent ? (
+                    <span className="flex items-center gap-2 min-w-0">
+                      <span className="w-7 h-7 rounded-full bg-indigo-100 text-indigo-700 font-black text-xs flex items-center justify-center shrink-0">
+                        {selectedStudent.name?.charAt(0).toUpperCase() || '?'}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="font-extrabold text-slate-900 block truncate">{selectedStudent.name}</span>
+                        <span className="text-xs text-slate-500">{selectedStudent.email}{selectedStudent.studentId ? ` • ${selectedStudent.studentId}` : ''}</span>
+                      </span>
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-2 text-slate-400">
+                      <Search className="w-4 h-4" />
+                      <span>Click to search &amp; select a student...</span>
+                    </span>
+                  )}
+                  <svg className={`w-4 h-4 text-slate-400 shrink-0 transition-transform ${studentDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                </button>
 
+                {/* Dropdown panel */}
+                {studentDropdownOpen && (
+                  <div className="absolute z-50 top-full left-0 right-0 mt-1.5 bg-white border border-indigo-200 rounded-2xl shadow-2xl overflow-hidden">
 
+                    {/* Search input inside dropdown */}
+                    <div className="p-2 border-b border-slate-100 bg-white">
+                      <div className="relative">
+                        <Search className="w-4 h-4 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                        <input
+                          autoFocus
+                          type="text"
+                          value={studentSearchQuery}
+                          onChange={(e) => setStudentSearchQuery(e.target.value)}
+                          placeholder="Type name, email or Student ID..."
+                          className="w-full pl-8 pr-8 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-slate-50"
+                        />
+                        {studentSearchQuery && (
+                          <button type="button" onClick={() => setStudentSearchQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-sm">✕</button>
+                        )}
+                      </div>
+                    </div>
 
-                  <option value="">-- Choose a Student ({filteredStudents.length} matches) --</option>
+                    {/* Student list */}
+                    <div className="max-h-56 overflow-y-auto">
+                      {filteredStudents.length === 0 ? (
+                        <div className="py-6 text-center text-sm text-slate-400 font-medium">No students match "{studentSearchQuery}"</div>
+                      ) : (
+                        filteredStudents.map((student) => (
+                          <button
+                            key={student.uid}
+                            type="button"
+                            onClick={() => { setSelectedStudentUid(student.uid); setStudentDropdownOpen(false); setStudentSearchQuery(''); }}
+                            className={`w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-indigo-50 transition-colors border-b border-slate-50 last:border-0 ${selectedStudentUid === student.uid ? 'bg-indigo-50' : ''}`}
+                          >
+                            <span className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 text-white font-black text-sm flex items-center justify-center shrink-0">
+                              {student.name?.charAt(0).toUpperCase() || '?'}
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="font-extrabold text-slate-900 text-sm block truncate">{student.name}</span>
+                              <span className="text-xs text-slate-500 block truncate">{student.email}</span>
+                            </span>
+                            <span className="flex flex-col items-end gap-1 shrink-0">
+                              {student.studentId && <span className="text-[10px] font-bold bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full">{student.studentId}</span>}
+                              {student.isPremium && <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">⭐ Pro</span>}
+                            </span>
+                            {selectedStudentUid === student.uid && <span className="text-indigo-600 font-black text-base shrink-0">✓</span>}
+                          </button>
+                        ))
+                      )}
+                    </div>
 
-
-
-                  {filteredStudents.map(student => (
-
-
-
-                    <option key={student.uid} value={student.uid}>
-
-
-
-                      {student.name} ({student.email}) {student.studentId ? `• ID: ${student.studentId}` : ''} {student.kcetTargetRank ? `• Rank: ${student.kcetTargetRank}` : ''}
-
-
-
-                    </option>
-
-
-
-                  ))}
-
-
-
-                </select>
-
-
-
+                    {/* Footer */}
+                    <div className="px-3 py-1.5 bg-slate-50 border-t border-slate-100 text-xs text-slate-400 font-medium text-center">
+                      {filteredStudents.length} student{filteredStudents.length !== 1 ? 's' : ''} {studentSearchQuery ? 'found' : 'registered'}
+                    </div>
+                  </div>
+                )}
               </div>
 
-
-
-
-
-
-
-              {/* Selected Student Info Card */}
-
-
-
+              {/* Selected student confirmation chip */}
               {selectedStudent && (
-
-
-
-                <div className="p-2.5 bg-white rounded-xl border border-indigo-200 flex items-center justify-between text-sm">
-
-
-
-                  <div>
-
-
-
-                    <span className="font-extrabold text-slate-900 block">{selectedStudent.name}</span>
-
-
-
-                    <span className="text-[11px] text-slate-500 font-medium">{selectedStudent.email} • ID: {selectedStudent.studentId || selectedStudent.uid.slice(0, 8)}</span>
-
-
-
+                <div className="p-2.5 bg-white rounded-xl border border-indigo-200 flex items-center justify-between">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 text-white font-black text-sm flex items-center justify-center shrink-0">
+                      {selectedStudent.name?.charAt(0).toUpperCase()}
+                    </span>
+                    <div className="min-w-0">
+                      <span className="font-extrabold text-slate-900 text-sm block truncate">{selectedStudent.name}</span>
+                      <span className="text-xs text-slate-500 block">{selectedStudent.email}{selectedStudent.studentId ? ` • ${selectedStudent.studentId}` : ''}</span>
+                    </div>
                   </div>
-
-
-
-                  <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
-
-
-
-                    Target Ready
-
-
-
-                  </span>
-
-
-
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">✓ Target Ready</span>
+                    <button type="button" onClick={() => { setSelectedStudentUid(''); }} className="text-slate-400 hover:text-red-500 text-sm font-bold transition-colors" title="Clear">✕</button>
+                  </div>
                 </div>
-
-
-
               )}
 
-
-
             </div>
-
-
-
           )}
+
+
+
+
+
+
+
 
 
 

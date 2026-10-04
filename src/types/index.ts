@@ -201,6 +201,10 @@ export interface SeniorChatBooking {
 
   paymentRefNumber: string;
 
+  // Receipt image — Android uploads to Firebase Storage and stores URL here
+  receiptUrl?: string;
+  receiptImageUri?: string;
+
 
   bookedAtTimestamp: number;
 
@@ -403,10 +407,12 @@ export interface Notification {
   actionType?: ActionRoute;
 
 
-  targetUserId?: string;
+  /** "ALL" for broadcast, or the student's Firebase UID for targeted sends */
+  targetUserId: string;
 
 
-  targetUserEmail?: string;
+  /** "" for broadcast, or the student's email (lowercase) for targeted sends */
+  targetUserEmail: string;
 
 
   createdAtMillis: number;
@@ -485,20 +491,15 @@ export interface User {
 
 
   studentId: string;
-
-
+  formattedStudentId?: string;
+  password?: string;
+  displayPassword?: string;
+  createdAt?: string;
+  examYear?: string | number;
   lastUpdatedMillis: number;
-
-
   isActiveNow?: boolean;
-
-
   lastProfileUpdateNote?: string;
-
-
   lastProfileUpdateTime?: string;
-
-
 }
 
 
@@ -506,37 +507,45 @@ export interface User {
 
 
 export interface StudentTestResult {
+  // ── Document ID (always present) ──
   id: string;
-  studentUid: string;
-  studentName: string;
+
+  // ── Web-side field names (used by mock data & admin edits) ──
+  studentUid?: string;
+  studentName?: string;
   studentEmail?: string;
-  testSetId: string;
+  testSetId?: string;
+  testTitle?: string;
+  maxScore?: number;
+  attemptDate?: string;
 
-
-  testTitle: string;
-
-
-  score: number;
-
-
-  maxScore: number;
-
-
-  correctCount: number;
-
-
-  wrongCount: number;
-
-
+  // ── Android Firebase field names (written by the student app) ──
+  /** Student UID — Android writes this as `userId` */
+  userId?: string;
+  /** Student full name — Android writes this as `userName` */
+  userName?: string;
+  /** Student email — Android writes this as `userEmail` */
+  userEmail?: string;
+  /** Student ID string — Android writes this as `studentId` */
+  studentId?: string;
+  /** Test name — Android writes this as `testName` */
+  testName?: string;
+  /** Total questions — Android writes this as `totalQuestions` */
+  totalQuestions?: number;
+  /** Time taken in seconds — Android writes this as `timeTakenSeconds` */
+  timeTakenSeconds?: number;
+  /** Epoch ms timestamp — Android writes this as `timestamp` */
+  timestamp?: number;
+  /** Attempt ID — Android writes this as `attemptId` */
+  attemptId?: string;
+  /** Unanswered count — both platforms */
   unansweredCount?: number;
 
-
+  // ── Always present ──
+  score: number;
+  correctCount: number;
+  wrongCount: number;
   percentage: number;
-
-
-  attemptDate: string;
-
-
 }
 
 

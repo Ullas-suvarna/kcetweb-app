@@ -88,9 +88,11 @@ export const HelplinesTab: React.FC = () => {
 
     if (!formData.title.trim()) return;
 
+    const wasEditing = !!editingId;
     await saveHelpline(formData);
-    notifySuccess(editingId ? `Helpline "${formData.title}" updated!` : `Helpline "${formData.title}" added successfully!`, editingId ? 'Helpline Updated' : 'Helpline Added');
+    notifySuccess(wasEditing ? `Helpline "${formData.title}" updated!` : `Helpline "${formData.title}" added successfully!`, wasEditing ? 'Helpline Updated' : 'Helpline Added');
     setIsFormOpen(false);
+    setEditingId(null);
 
   };
 
@@ -340,7 +342,7 @@ export const HelplinesTab: React.FC = () => {
 
                 type="button"
 
-                onClick={() => setIsFormOpen(false)}
+                onClick={() => { setIsFormOpen(false); setEditingId(null); }}
 
                 className="px-4 py-2 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-100"
 

@@ -972,6 +972,9 @@ export const INITIAL_NOTIFICATIONS: Notification[] = [
 
     actionType: 'NAV_TEST_SERIES',
 
+    targetUserId: 'ALL',
+
+    targetUserEmail: '',
 
     createdAtMillis: Date.now() - 7200000
 
@@ -1002,6 +1005,9 @@ export const INITIAL_NOTIFICATIONS: Notification[] = [
 
     actionType: 'NAV_PROFILE',
 
+    targetUserId: 'ALL',
+
+    targetUserEmail: '',
 
     createdAtMillis: Date.now() - 86400000
 
