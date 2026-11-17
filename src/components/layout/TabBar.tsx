@@ -112,6 +112,11 @@ export const TabBar: React.FC<TabBarProps> = ({ activeTab, onSelectTab }) => {
       badge: challenges.length 
     },
     {
+      id: 'admin-email-notifications',
+      name: '📬 Student Email Notifications',
+      badge: 'NEW'
+    },
+    {
       id: 'email-delivery',
       name: '✉️ Email Delivery',
       badge: 'SETTINGS'
